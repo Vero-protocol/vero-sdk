@@ -36,14 +36,14 @@
     "sdk"
   ],
   "devDependencies": {
+    "@size-limit/preset-small-lib": "12.1.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
     "jest": "^30.0.0",
-    "@size-limit/preset-small-lib": "^13.0.3",
-    "size-limit": "^13.0.3",
+    "size-limit": "12.1.0",
     "ts-jest": "^29.2.0",
     "typescript": "^5.6.0"
   }
