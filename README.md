@@ -123,6 +123,20 @@ npm run build
 
 Requires Node.js 20+.
 
+## Bundle-size budget
+
+This SDK is intended for browser applications, so consumer bundle size is a
+public API concern. It deliberately has **zero runtime dependencies**: a
+dependency added for convenience can otherwise silently add code to every
+dashboard bundle.
+
+After building, `npm run size` checks the public `@vero-protocol/sdk` entry
+point as a browser library. The **5 kB brotli-compressed** budget in
+[`.size-limit.json`](.size-limit.json) covers the current SDK with room for
+small, intentional changes. CI runs this check for every push and pull request;
+an increase beyond the budget fails the build. Raise the budget only when the
+added browser cost is understood, justified in the pull request, and reviewed.
+
 ## Contributing
 
 Work here is funded through [GrantFox](https://contribute.grantfox.xyz/). Claim
