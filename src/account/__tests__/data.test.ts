@@ -37,12 +37,23 @@ describe('Account Data', () => {
         malformed: 'not-valid-base64!',
       };
       const result = readDataEntry(data, 'malformed');
-      // Buffer.from with base64 doesn't throw for invalid input,
-      // it just produces a buffer. So isValid will be true but the value
-      // will be garbage. This is expected behavior.
       expect(result).toBeDefined();
       expect(result?.key).toBe('malformed');
-      // The value will be whatever Buffer.from produces
+      // Buffer.from with base64 doesn't throw for invalid input
+      // The value will be some garbage string
+      expect(typeof result?.value).toBe('string');
+    });
+
+    it('should handle non-UTF8 data', () => {
+      // Create a buffer with invalid UTF-8 sequence
+      const nonUtf8 = Buffer.from([0x80, 0x81, 0x82]);
+      const data = {
+        invalid: nonUtf8.toString('base64'),
+      };
+      const result = readDataEntry(data, 'invalid');
+      expect(result).toBeDefined();
+      expect(result?.key).toBe('invalid');
+      // Buffer.from with base64 doesn't throw for invalid input
       expect(typeof result?.value).toBe('string');
     });
   });
@@ -73,6 +84,39 @@ describe('Account Data', () => {
       const result = getReputation(data);
       expect(result).toBeNull();
     });
+
+    it('should handle reputation with missing score', () => {
+      const data = {
+        [DataKey.Reputation]: Buffer.from(
+          JSON.stringify({ metadata: { contributions: 5 } })
+        ).toString('base64'),
+      };
+      const result = getReputation(data);
+      expect(result).toBeDefined();
+      expect(result?.score).toBe(0);
+      expect(result?.tier).toBe('unknown');
+    });
+
+    it('should handle different score tiers', () => {
+      const testCases = [
+        { score: 5, tier: 'unknown' },
+        { score: 10, tier: 'bronze' },
+        { score: 100, tier: 'silver' },
+        { score: 500, tier: 'gold' },
+        { score: 1000, tier: 'platinum' },
+        { score: 5000, tier: 'platinum' },
+      ];
+
+      for (const { score, tier } of testCases) {
+        const data = {
+          [DataKey.Reputation]: Buffer.from(
+            JSON.stringify({ score })
+          ).toString('base64'),
+        };
+        const result = getReputation(data);
+        expect(result?.tier).toBe(tier);
+      }
+    });
   });
 
   describe('getMetadata', () => {
@@ -93,6 +137,22 @@ describe('Account Data', () => {
       const result = getMetadata(data);
       expect(result).toBeNull();
     });
+
+    it('should handle invalid metadata JSON', () => {
+      const data = {
+        [DataKey.Metadata]: Buffer.from('invalid json').toString('base64'),
+      };
+      const result = getMetadata(data);
+      expect(result).toBeNull();
+    });
+
+    it('should handle malformed metadata base64', () => {
+      const data = {
+        [DataKey.Metadata]: 'not-valid-base64!',
+      };
+      const result = getMetadata(data);
+      expect(result).toBeNull();
+    });
   });
 
   describe('getProfile', () => {
@@ -110,6 +170,14 @@ describe('Account Data', () => {
 
     it('should return null for missing profile', () => {
       const data = {};
+      const result = getProfile(data);
+      expect(result).toBeNull();
+    });
+
+    it('should handle invalid profile JSON', () => {
+      const data = {
+        [DataKey.Profile]: Buffer.from('invalid json').toString('base64'),
+      };
       const result = getProfile(data);
       expect(result).toBeNull();
     });
@@ -146,6 +214,13 @@ describe('Account Data', () => {
       const data = {};
       expect(isValidator(data)).toBe(false);
     });
+
+    it('should return false for empty data', () => {
+      const data = {
+        some: 'value',
+      };
+      expect(isValidator(data)).toBe(false);
+    });
   });
 
   describe('listDataEntries', () => {
@@ -166,6 +241,22 @@ describe('Account Data', () => {
       const data = {};
       const entries = listDataEntries(data);
       expect(entries).toHaveLength(0);
+    });
+
+    it('should handle mixed valid and invalid entries', () => {
+      const data = {
+        valid: Buffer.from('valid').toString('base64'),
+        invalid: 'not-valid-base64!',
+      };
+      const entries = listDataEntries(data);
+      expect(entries).toHaveLength(2);
+      expect(entries[0]?.key).toBe('valid');
+      expect(entries[0]?.isValid).toBe(true);
+      expect(entries[1]?.key).toBe('invalid');
+      // Buffer.from with base64 doesn't throw for invalid input
+      // So isValid will be true, but the value will be garbage
+      // Just check that it's defined
+      expect(entries[1]?.value).toBeDefined();
     });
   });
 });
