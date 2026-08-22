@@ -23,6 +23,8 @@ export enum VeroErrorCode {
   UserRejected = 'USER_REJECTED',
   /** No wallet extension detected. */
   WalletUnavailable = 'WALLET_UNAVAILABLE',
+  /** The wallet is connected to a different Stellar network. */
+  NetworkMismatch = 'NETWORK_MISMATCH',
   /** Transaction rejected by the network. */
   TransactionFailed = 'TRANSACTION_FAILED',
   /** Sequence number was already consumed. */
