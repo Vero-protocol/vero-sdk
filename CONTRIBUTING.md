@@ -40,9 +40,10 @@ npm run test:coverage # with a coverage report
 npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
 npm run build         # emit dist/
+npm run docs          # generate the API reference into docs/
 ```
 
-All four of test, typecheck, lint, and build must pass before a PR can merge.
+All four of test, typecheck, lint, and build must pass before a PR can merge. Documentation generation (`npm run docs`) also runs in CI and fails the job if TypeDoc reports an error.
 
 ## Branch naming
 

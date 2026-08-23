@@ -40,3 +40,20 @@ jobs:
 
       - name: Check bundle-size budget
         run: npm run size
+
+  docs:
+    name: Generate API docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate API docs
+        run: npm run docs

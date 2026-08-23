@@ -119,9 +119,14 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
+npm run docs
 ```
 
 Requires Node.js 20+.
+
+`npm run docs` generates a browsable API reference from the source comments into `docs/` (gitignored). CI runs the same command so broken doc comments fail the build.
+
+After merge to `main`, the generated reference can be published to GitHub Pages once Pages is set to deploy from GitHub Actions.
 
 ## Bundle-size budget
 
