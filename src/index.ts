@@ -9,6 +9,7 @@
 
 export * from './types';
 export * from './errors';
-export * from './network';
-export * from './rpc';
 export * from './nonce';
+export * from './rpc';
+export * from './transaction';
+export * from './network';
