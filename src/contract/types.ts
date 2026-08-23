@@ -57,78 +57,72 @@ export interface SubmitOptions {
   maxAttempts?: number;
 }
 
-export const VERO_READ_METHODS = [
-  'get_admin',
-  'get_estimated_cost',
-  'get_storage_version',
-  'get_upgrade_signers',
-  'get_upgrade_threshold',
-  'get_withdrawal_timelock',
-  'get_task',
-  'get_archived_task',
-  'get_snapshot',
-  'get_snapshot_meta',
-  'get_guardians_page',
-  'get_tasks_page',
-  'get_reward_streams_page',
-  'get_snapshot_history',
-  'get_snapshot_at',
-  'get_reward_stream',
-  'has_role',
-  'is_guardian',
-  'get_reputation',
-  'calculate_voting_power',
-  'get_weight_threshold',
-  'is_paused',
-  'get_failure_count',
-  'get_reporter_failure_count',
-  'get_failure_reporters',
-  'is_trusted_reporters_only',
-] as const;
+export type VeroReadMethod =
+  | 'get_admin'
+  | 'get_estimated_cost'
+  | 'get_storage_version'
+  | 'get_upgrade_signers'
+  | 'get_upgrade_threshold'
+  | 'get_withdrawal_timelock'
+  | 'get_task'
+  | 'get_archived_task'
+  | 'get_snapshot'
+  | 'get_snapshot_meta'
+  | 'get_guardians_page'
+  | 'get_tasks_page'
+  | 'get_reward_streams_page'
+  | 'get_snapshot_history'
+  | 'get_snapshot_at'
+  | 'get_reward_stream'
+  | 'has_role'
+  | 'is_guardian'
+  | 'get_reputation'
+  | 'calculate_voting_power'
+  | 'get_weight_threshold'
+  | 'is_paused'
+  | 'get_failure_count'
+  | 'get_reporter_failure_count'
+  | 'get_failure_reporters'
+  | 'is_trusted_reporters_only';
 
-export type VeroReadMethod = (typeof VERO_READ_METHODS)[number];
-
-export const VERO_WRITE_METHODS = [
-  'initialize',
-  'migrate_storage',
-  'batch_execute',
-  'upgrade_contract',
-  'set_upgrade_signers',
-  'propose_upgrade',
-  'approve_upgrade',
-  'execute_upgrade',
-  'cancel_upgrade',
-  'lock_tokens',
-  'request_unlock',
-  'unlock_tokens',
-  'emergency_recover',
-  'register_task',
-  'cancel_task',
-  'purge_task',
-  'vote',
-  'vote_batch',
-  'archive_task',
-  'record_snapshot',
-  'start_reward_stream',
-  'grant_role',
-  'revoke_role',
-  'add_guardian',
-  'remove_guardian',
-  'set_reputation',
-  'resign_guardian',
-  'set_weight_threshold',
-  'set_vault_address',
-  'set_fee_bps',
-  'set_treasury_address',
-  'toggle_pause',
-  'pause',
-  'unpause',
-  'record_failure',
-  'set_trusted_reporters_only',
-  'reset_circuit_breaker',
-] as const;
-
-export type VeroWriteMethod = (typeof VERO_WRITE_METHODS)[number];
+export type VeroWriteMethod =
+  | 'initialize'
+  | 'migrate_storage'
+  | 'batch_execute'
+  | 'upgrade_contract'
+  | 'set_upgrade_signers'
+  | 'propose_upgrade'
+  | 'approve_upgrade'
+  | 'execute_upgrade'
+  | 'cancel_upgrade'
+  | 'lock_tokens'
+  | 'request_unlock'
+  | 'unlock_tokens'
+  | 'emergency_recover'
+  | 'register_task'
+  | 'cancel_task'
+  | 'purge_task'
+  | 'vote'
+  | 'vote_batch'
+  | 'archive_task'
+  | 'record_snapshot'
+  | 'start_reward_stream'
+  | 'grant_role'
+  | 'revoke_role'
+  | 'add_guardian'
+  | 'remove_guardian'
+  | 'set_reputation'
+  | 'resign_guardian'
+  | 'set_weight_threshold'
+  | 'set_vault_address'
+  | 'set_fee_bps'
+  | 'set_treasury_address'
+  | 'toggle_pause'
+  | 'pause'
+  | 'unpause'
+  | 'record_failure'
+  | 'set_trusted_reporters_only'
+  | 'reset_circuit_breaker';
 
 export type OperationName =
   | 'RegisterTask'
