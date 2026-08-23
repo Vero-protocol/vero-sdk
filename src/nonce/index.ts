@@ -1,5 +1,14 @@
-/** Reads the current on-network sequence for an account. */
-export type SequenceReader = (account: string) => Promise<bigint>;
+/** Fetches the last on-network sequence for an account. */
+export interface SequenceFetcher {
+  fetchSequence(account: string): Promise<bigint>;
+}
+
+/** Configures the sequence source used by NonceManager. */
+export interface SequenceReader {
+  fetcher: SequenceFetcher;
+}
+
+type LegacySequenceReader = (account: string) => Promise<bigint>;
 
 interface AccountState {
   nextSequence?: bigint;
@@ -9,8 +18,18 @@ interface AccountState {
 /** Coordinates sequence reservations for accounts. */
 export class NonceManager {
   private readonly accounts = new Map<string, AccountState>();
+  private readonly readSequence: LegacySequenceReader;
+  private readonly usesLastSequence: boolean;
 
-  constructor(private readonly readSequence: SequenceReader) {}
+  constructor(reader: LegacySequenceReader | SequenceReader) {
+    if (typeof reader === 'function') {
+      this.readSequence = reader;
+      this.usesLastSequence = false;
+    } else {
+      this.readSequence = (account) => reader.fetcher.fetchSequence(account);
+      this.usesLastSequence = true;
+    }
+  }
 
   /** Reserve the next sequence number for an account. */
   async reserve(account: string): Promise<bigint> {
@@ -22,7 +41,7 @@ export class NonceManager {
           state = { lock: Promise.resolve() };
           this.accounts.set(account, state);
         }
-        state.nextSequence = nextSequence;
+        state.nextSequence = this.usesLastSequence ? nextSequence + 1n : nextSequence;
       }
 
       const sequence = state.nextSequence;
@@ -49,6 +68,21 @@ export class NonceManager {
         });
       }
     });
+  }
+
+  /** Return the most recently reserved or refreshed sequence for an account. */
+  cached(account: string): bigint | undefined {
+    const nextSequence = this.accounts.get(account)?.nextSequence;
+    if (nextSequence === undefined) {
+      return undefined;
+    }
+
+    return this.usesLastSequence ? nextSequence - 1n : nextSequence;
+  }
+
+  /** Clear the cached sequence for an account. */
+  invalidate(account: string): void {
+    this.accounts.delete(account);
   }
 
   private async withLock<T>(account: string, operation: () => Promise<T>): Promise<T> {
