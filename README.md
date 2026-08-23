@@ -111,6 +111,21 @@ try {
 
 Switch on `code`, never on message text — messages change, codes don't.
 
+## Error Code Reference
+
+| Code | Cause | Retryable | Recommended Handling |
+|------|-------|-----------|----------------------|
+| `VeroErrorCode.InvalidUrl` | Endpoint URL fails validation — bad scheme or unparseable | ❌ No | Correct the URL; verify `https://` scheme before retrying |
+| `VeroErrorCode.AllEndpointsFailed` | Every configured RPC endpoint returned an error or timed out | ⚠️ Conditional | Wait for endpoint recovery; check `rpc.health()` before retrying |
+| `VeroErrorCode.RpcRequestFailed` | A single RPC request returned a non-success HTTP status | ⚠️ Conditional | Retry only on transient errors (429, 5xx); fix request payload for 4xx |
+| `VeroErrorCode.RpcTimeout` | The RPC request did not respond within the configured timeout | ✅ Yes | Retry immediately or with short backoff; consider increasing `timeoutMs` |
+| `VeroErrorCode.AccountNotFound` | The Stellar account does not exist on the specified network | ❌ No | Fund or create the account on-chain before retrying |
+| `VeroErrorCode.UserRejected` | The user declined the signature prompt in their wallet | ❌ No | Surface the cancellation to the user; let them re-initiate when ready |
+| `VeroErrorCode.WalletUnavailable` | No browser wallet extension was detected | ⚠️ Conditional | Prompt user to install the wallet extension; retry after it is available |
+| `VeroErrorCode.TransactionFailed` | The Stellar network rejected the submitted transaction | ❌ No | Decode the transaction result XDR to diagnose before resubmitting |
+| `VeroErrorCode.BadSequence` | The transaction's sequence number is stale | ⚠️ Conditional | Fetch a fresh sequence number and rebuild the transaction before retrying |
+| `VeroErrorCode.Unknown` | Error does not match any known SDK error shape | ❌ No | Log the full error and `cause`; investigate before deciding on recovery |
+
 ## Development
 
 ```bash
