@@ -30,6 +30,7 @@ logic lives now.
 - `errors` — `VeroError` with stable, switchable `VeroErrorCode`s
 - `network` — network config and HTTPS-enforcing endpoint validation
 - `rpc` — RPC client with failover, health tracking, and origin-safe URL building
+- `account` — Horizon account loader, data-entry helpers, and stroop-safe balances
 - `contract` — typed read/write wrappers for the Vero core contract entrypoints
 
 Wallet adapters and higher-level transaction builders are tracked as open
