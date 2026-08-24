@@ -80,4 +80,18 @@ const viaMapImport = await import('@vero-protocol/sdk');
 assert(viaMapImport.RpcClient !== undefined,
   'exports map: import("@vero-protocol/sdk") did not resolve to the ESM build');
 
-console.log(`smoke-test: OK — ${REQUIRED_EXPORTS.length} exports verified in both CJS and ESM (direct + exports map), declarations present`);
+// The testing subpath must resolve independently of the main entry.
+const testingCjs = require('@vero-protocol/sdk/testing');
+assert(typeof testingCjs.createMockServer === 'function',
+  'exports map: require("@vero-protocol/sdk/testing") did not resolve to the CJS build');
+
+const testingEsm = await import('@vero-protocol/sdk/testing');
+assert(typeof testingEsm.createMockServer === 'function',
+  'exports map: import("@vero-protocol/sdk/testing") did not resolve to the ESM build');
+
+for (const format of ['cjs', 'esm']) {
+  const dts = join(root, 'dist', format, 'testing', 'index.d.ts');
+  accessSync(dts, constants.R_OK);
+}
+
+console.log(`smoke-test: OK — ${REQUIRED_EXPORTS.length} exports verified in both CJS and ESM (direct + exports map), declarations present; testing subpath resolves in both formats`);
