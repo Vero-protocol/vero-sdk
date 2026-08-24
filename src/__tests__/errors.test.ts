@@ -10,9 +10,16 @@ describe('normalizeError', () => {
     'User declined the request',
     'User rejected the transaction',
     'The request was rejected by the user',
-    'Signature denied',
+    'User denied the signature',
   ])('classifies wallet cancellation: %s', (msg) => {
     expect(normalizeError(new Error(msg)).code).toBe(VeroErrorCode.UserRejected);
+  });
+
+  it.each([
+    'permission denied',
+    'access denied',
+  ])('does not classify infrastructure failures as wallet cancellation: %s', (msg) => {
+    expect(normalizeError(new Error(msg)).code).not.toBe(VeroErrorCode.UserRejected);
   });
 
   it('classifies a stale sequence number', () => {
