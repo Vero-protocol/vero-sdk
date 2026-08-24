@@ -1,6 +1,6 @@
-import { createContractReader, VeroContractReader } from './read';
-import { createContractWriter, VeroContractWriter } from './write';
-import type { ContractReaderOptions, ContractWriterOptions } from './types';
+import { createContractReader, VeroContractReader } from './read.js';
+import { createContractWriter, VeroContractWriter } from './write.js';
+import type { ContractReaderOptions, ContractWriterOptions } from './types.js';
 
 export type VeroContractClientOptions = ContractWriterOptions;
 

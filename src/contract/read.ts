@@ -1,4 +1,4 @@
-import type { Task, Vote } from '../types';
+import type { Task, Vote } from '../types/index.js';
 import type {
   Address,
   ConsensusState,
@@ -12,7 +12,7 @@ import type {
   Snapshot,
   SnapshotMeta,
   VeroReadMethod,
-} from './types';
+} from './types.js';
 import {
   asBigint,
   asBoolean,
@@ -27,7 +27,7 @@ import {
   simulatePath,
   toJsonCompatible,
   unwrapResult,
-} from './wire';
+} from './wire.js';
 
 export class VeroContractReader {
   private readonly rpc: ContractRpcClient;

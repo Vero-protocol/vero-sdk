@@ -1,5 +1,5 @@
-import { VeroError, VeroErrorCode } from '../errors';
-import type { ContractArgument, Decoder } from './types';
+import { VeroError, VeroErrorCode } from '../errors/index.js';
+import type { ContractArgument, Decoder } from './types.js';
 
 export const simulatePath = (contractId: string): string => `/contracts/${contractId}/simulate`;
 export const submitPath = (contractId: string): string => `/contracts/${contractId}/submit`;

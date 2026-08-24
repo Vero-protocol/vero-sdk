@@ -1,5 +1,5 @@
-import type { NonceManager } from '../nonce';
-import type { Role, SubmitResult, Task, Vote } from '../types';
+import type { NonceManager } from '../nonce/index.js';
+import type { Role, SubmitResult, Task, Vote } from '../types/index.js';
 
 export type { SubmitResult, Task, Vote };
 

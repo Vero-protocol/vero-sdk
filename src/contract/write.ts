@@ -1,5 +1,5 @@
-import { VeroError, VeroErrorCode, normalizeError } from '../errors';
-import type { SubmitResult } from '../types';
+import { VeroError, VeroErrorCode, normalizeError } from '../errors/index.js';
+import type { SubmitResult } from '../types/index.js';
 import type {
   Address,
   AddressPairInput,
@@ -26,9 +26,9 @@ import type {
   VeroWriteMethod,
   VoteBatchInput,
   VoteInput,
-} from './types';
-import { asBoolean, asNumber, asString, contractInteger, isRecord, submitPath, toJsonCompatible } from './wire';
-import type { NonceManager } from '../nonce';
+} from './types.js';
+import { asBoolean, asNumber, asString, contractInteger, isRecord, submitPath, toJsonCompatible } from './wire.js';
+import type { NonceManager } from '../nonce/index.js';
 
 const DEFAULT_MAX_ATTEMPTS = 2;
 const MAX_ATTEMPT_CAP = 5;
