@@ -127,13 +127,19 @@ export class AccountLoader {
 
   /**
    * Force refresh of cached account
+   *
+   * @param horizonUrl - The Horizon URL
+   * @param publicKey - The public key of the account to load
+   * @param cacheTTL - Optional TTL for the cached entry in ms
+   * @returns The refreshed Horizon account data
    */
   async refreshCache(
     horizonUrl: string,
-    publicKey: string
+    publicKey: string,
+    cacheTTL: number = this.defaultTTL
   ): Promise<HorizonAccount> {
     const account = await this.fetchAccount(horizonUrl, publicKey);
-    this.cache.delete(publicKey);
+    this.setCached(publicKey, account, cacheTTL);
     return account;
   }
 
