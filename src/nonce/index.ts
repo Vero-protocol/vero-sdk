@@ -12,7 +12,7 @@
  *   - vero-relayer-service#198  cached sequence served from inside the lock
  */
 
-import { AccountLockManager } from './lock';
+import { AccountLockManager } from './lock.js';
 
 /** Minimal interface for fetching the on-chain sequence number of an account. */
 export interface SequenceFetcher {
