@@ -179,7 +179,7 @@ describe('AccountLoader', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('should refresh cache', async () => {
+    it('should refresh cache and repopulate it so subsequent loadAccount calls hit cache', async () => {
       const mockAccount = {
         account_id: 'test222',
         sequence: '222',
@@ -211,6 +211,46 @@ describe('AccountLoader', () => {
       const result = await loader.refreshCache(mockHorizonUrl, 'test222');
       expect(result.sequence).toBe('223');
       expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // Subsequent loadAccount with cache enabled should hit cache without network fetch
+      const cachedAccount = await loader.loadAccount(mockHorizonUrl, 'test222', { cache: true });
+      expect(cachedAccount.sequence).toBe('223');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should respect custom cacheTTL parameter in refreshCache', async () => {
+      jest.useFakeTimers();
+      const mockAccount = {
+        account_id: 'test555',
+        sequence: '555',
+        flags: { auth_required: false, auth_revocable: false, auth_immutable: false },
+        signers: [],
+        thresholds: { low_threshold: 0, med_threshold: 0, high_threshold: 0 },
+        balances: [],
+        data: {},
+        last_modified_ledger: 100,
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockAccount,
+      });
+
+      await loader.refreshCache(mockHorizonUrl, 'test555', 500);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Subsequent load before TTL should hit cache
+      await loader.loadAccount(mockHorizonUrl, 'test555', { cache: true });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Advance time past custom TTL
+      jest.advanceTimersByTime(600);
+
+      // Subsequent load after TTL should fetch from network
+      await loader.loadAccount(mockHorizonUrl, 'test555', { cache: true });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      jest.useRealTimers();
     });
 
     it('should expire cache after TTL', async () => {
