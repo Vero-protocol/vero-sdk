@@ -58,6 +58,8 @@ export interface HorizonAccount {
 /**
  * Options for loading an account
  */
+import type { ValidateUrlOptions } from '../network/index.js';
+
 export interface LoadAccountOptions {
   /** Whether to use cached data (default: false) */
   cache?: boolean;
@@ -65,6 +67,12 @@ export interface LoadAccountOptions {
   skipCache?: boolean;
   /** Time-to-live for cached account data in milliseconds (default: 60000) */
   cacheTTL?: number;
+  /** Per-request timeout in milliseconds (default: 10000) */
+  timeoutMs?: number;
+  /** Options passed to validateUrl */
+  urlOptions?: ValidateUrlOptions;
+  /** Injectable fetch implementation for network requests */
+  fetchImpl?: typeof fetch;
 }
 
 /**
