@@ -93,6 +93,18 @@ export enum VeroErrorCode {
   WalletUnavailable = 'WALLET_UNAVAILABLE',
 
   /**
+   * @cause     The connected wallet is on a different Stellar network than the
+   *            one the SDK is configured for — signing would produce a
+   *            transaction for the wrong network.
+   * @retryable NO — the mismatch is a configuration problem, not a transient
+   *            failure. Retrying signs against the wrong network again.
+   * @handling Prompt the user to switch networks in their wallet, or correct
+   *           the SDK's network configuration, then re-initiate. Never submit
+   *           a transaction signed for a different network.
+   */
+  NetworkMismatch = 'NETWORK_MISMATCH',
+
+  /**
    * @cause     The Stellar network rejected the submitted transaction. This
    *            covers Soroban-specific failures (contract errors, resource
    *            limits) as well as classic transaction errors (insufficient
@@ -104,6 +116,7 @@ export enum VeroErrorCode {
    *           failure reason. Adjust the transaction parameters (fees,
    *           signers, contract args) before resubmitting.
    */
+
   TransactionFailed = 'TRANSACTION_FAILED',
 
   /**
