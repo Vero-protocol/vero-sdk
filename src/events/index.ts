@@ -8,7 +8,7 @@
  */
 
 // Decoder — typed event decoding with topic-abbreviation absorption.
-export * from './decoder';
+export * from './decoder.js';
 
 // Cursor — no-skip cursor persistence (vero-core-engine#179).
-export * from './cursor';
+export * from './cursor.js';
