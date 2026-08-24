@@ -10,6 +10,24 @@
   "excludeExternals": true,
   "githubPages": true,
   "treatWarningsAsErrors": true,
+  "blockTags": [
+    "@param",
+    "@returns",
+    "@throws",
+    "@example",
+    "@remarks",
+    "@see",
+    "@deprecated",
+    "@defaultValue",
+    "@typeParam",
+    "@template",
+    "@module",
+    "@packageDocumentation",
+    "@cause",
+    "@retryable",
+    "@handling",
+    "@default"
+  ],
   "validation": {
     "invalidLink": true,
     "notExported": true
