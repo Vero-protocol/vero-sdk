@@ -9,25 +9,126 @@
 
 /** Stable, switchable error codes. Add to this union rather than string-matching messages. */
 export enum VeroErrorCode {
-  /** Endpoint URL failed validation (bad scheme, unparseable). */
+  /**
+   * @cause     The endpoint URL provided in configuration fails validation —
+   *            the scheme is not `https://` (or explicitly opted-in `http://`
+   *            for localhost), or the string is unparseable as a URL.
+   * @retryable NO — the URL is invalid and retrying with the same value will
+   *            always fail.
+   * @handling Correct the URL in your configuration. Verify the scheme is
+   *           `https://` and the host is reachable before retrying.
+   */
   InvalidUrl = 'INVALID_URL',
-  /** Every configured RPC endpoint failed. */
+
+  /**
+   * @cause     Every RPC endpoint configured in the `RpcClient` either
+   *            returned a transport-level error, timed out, or was already
+   *            quarantined as unhealthy.
+   * @retryable CONDITIONAL — safe to retry only after at least one endpoint
+   *            has recovered; check `rpc.health()` to confirm an endpoint is
+   *            back before attempting again.
+   * @handling Inspect `rpc.health()` to see which endpoints are healthy. If
+   *           all are down, wait for recovery or add additional backup
+   *           endpoints.
+   */
   AllEndpointsFailed = 'ALL_ENDPOINTS_FAILED',
-  /** A single RPC request failed. */
+
+  /**
+   * @cause     A single RPC request returned a non-success HTTP status or a
+   *            malformed response body. This is a request-level failure, not
+   *            a transport-level one.
+   * @retryable CONDITIONAL — retry only if the error is clearly transient
+   *            (e.g. HTTP 429 rate-limit, HTTP 5xx). Do NOT retry on HTTP
+   *            4xx client errors — fix the request payload first.
+   * @handling Inspect the HTTP status code in the error. For 4xx errors,
+   *           review the request parameters. For 5xx or 429, retry with
+   *           exponential backoff.
+   */
   RpcRequestFailed = 'RPC_REQUEST_FAILED',
-  /** RPC request exceeded its timeout. */
+
+  /**
+   * @cause     The RPC request did not receive a response within the
+   *            configured `timeoutMs` window. This is typically caused by
+   *            network congestion or a slow ledger close.
+   * @retryable YES — timeouts are transient; safe to retry immediately or
+   *            with a short backoff.
+   * @handling Retry the request. Consider increasing `timeoutMs` if timeouts
+   *           are frequent, as the network may be under load.
+   */
   RpcTimeout = 'RPC_TIMEOUT',
-  /** Account does not exist on the network. */
+
+  /**
+   * @cause     The Stellar account queried does not exist on the specified
+   *            network. The account has not been funded or created.
+   * @retryable NO — the account must be created and funded on-chain before
+   *            any lookup will succeed.
+   * @handling Fund or create the account on the target network before
+   *           retrying. Verify the network passphrase matches the account's
+   *           actual network.
+   */
   AccountNotFound = 'ACCOUNT_NOT_FOUND',
-  /** The user declined a signature prompt. */
+
+  /**
+   * @cause     The user explicitly declined or cancelled the signature prompt
+   *            in their wallet extension (Freighter, Rabet, etc.).
+   * @retryable NO — retrying immediately will prompt the user again and they
+   *            will likely decline again. This is a user-intent signal, not a
+   *            transient error.
+   * @handling Surface the cancellation to the user and let them re-initiate
+   *           the action when ready.
+   */
   UserRejected = 'USER_REJECTED',
-  /** No wallet extension detected. */
+
+  /**
+   * @cause     No browser wallet extension (Freighter, Rabet, etc.) was
+   *            detected in the current environment. The wallet may not be
+   *            installed, or the page is loaded in an unsupported context
+   *            (e.g. incognito, iframe without proper permissions).
+   * @retryable CONDITIONAL — safe to retry only after the user has installed
+   *            or enabled the wallet extension.
+   * @handling Prompt the user to install the required wallet extension and
+   *           reload the page. Do not retry until the wallet is confirmed
+   *           available.
+   */
   WalletUnavailable = 'WALLET_UNAVAILABLE',
-  /** Transaction rejected by the network. */
+
+  /**
+   * @cause     The Stellar network rejected the submitted transaction. This
+   *            covers Soroban-specific failures (contract errors, resource
+   *            limits) as well as classic transaction errors (insufficient
+   *            fees, missing signers).
+   * @retryable NO — retrying without inspecting the result risks
+   *            double-submitting a transaction that may have partially
+   *            succeeded on-chain. Inspect the `TransactionResult` first.
+   * @handling Decode the transaction result XDR to determine the specific
+   *           failure reason. Adjust the transaction parameters (fees,
+   *           signers, contract args) before resubmitting.
+   */
   TransactionFailed = 'TRANSACTION_FAILED',
-  /** Sequence number was already consumed. */
+
+  /**
+   * @cause     The transaction's sequence number does not match the account's
+   *            current on-chain sequence. Another transaction was likely
+   *            submitted since this one was built, consuming the sequence.
+   * @retryable CONDITIONAL — safe to retry only after fetching a fresh
+   *            sequence number from the network and rebuilding the
+   *            transaction.
+   * @handling Re-read the account's current sequence number, rebuild the
+   *           transaction, and resubmit. This typically indicates a
+   *           concurrent submission or a stale cached sequence.
+   */
   BadSequence = 'BAD_SEQUENCE',
-  /** Anything not otherwise classified. */
+
+  /**
+   * @cause     The error does not match any known SDK error shape. This is a
+   *            catch-all for unexpected failures from wallet adapters, RPC
+   *            endpoints, or runtime exceptions.
+   * @retryable NO — without knowing the root cause, retrying is unsafe.
+   *            Inspect the error message and underlying `cause` to diagnose.
+   * @handling Log the full error including the `cause` property. Investigate
+   *           whether the failure is from the wallet, RPC layer, or your
+   *           application code before deciding on a recovery strategy.
+   */
   Unknown = 'UNKNOWN',
 }
 

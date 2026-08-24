@@ -5,7 +5,7 @@
  * Reports what is on-chain without making authorization decisions.
  */
 
-import { AccountDataEntry, ReputationData } from './types';
+import { AccountDataEntry, ReputationData } from './types.js';
 
 /**
  * Data key constants

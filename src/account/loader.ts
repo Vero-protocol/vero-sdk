@@ -11,7 +11,7 @@ import {
   LoadAccountOptions,
   AccountNotFoundError,
   BalanceLine,
-} from './types';
+} from './types.js';
 
 /**
  * Account cache entry

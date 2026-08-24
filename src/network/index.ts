@@ -8,8 +8,8 @@
  * endpoint could lie about who is an admin. See vero-guardian-dashboard#288.
  */
 
-import { VeroError, VeroErrorCode } from '../errors';
-import type { NetworkName } from '../types';
+import { VeroError, VeroErrorCode } from '../errors/index.js';
+import type { NetworkName } from '../types/index.js';
 
 export interface NetworkConfig {
   horizonUrl: string;

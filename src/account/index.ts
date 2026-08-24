@@ -6,10 +6,10 @@
  */
 
 // Types
-export * from './types';
+export * from './types.js';
 
 // Loader
-export { AccountLoader, accountLoader } from './loader';
+export { AccountLoader, accountLoader } from './loader.js';
 
 // Data
 export {
@@ -21,7 +21,7 @@ export {
   hasDataEntry,
   listDataEntries,
   isValidator,
-} from './data';
+} from './data.js';
 
 // Balances
 export {
@@ -37,4 +37,4 @@ export {
   compareStroops,
   addStroops,
   subtractStroops,
-} from './balances';
+} from './balances.js';

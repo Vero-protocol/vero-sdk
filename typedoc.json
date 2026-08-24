@@ -1,0 +1,39 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "tsconfig": "tsconfig.build.json",
+  "out": "docs",
+  "name": "@vero-protocol/sdk",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "githubPages": true,
+  "treatWarningsAsErrors": true,
+  "blockTags": [
+    "@param",
+    "@returns",
+    "@throws",
+    "@example",
+    "@remarks",
+    "@see",
+    "@deprecated",
+    "@defaultValue",
+    "@typeParam",
+    "@template",
+    "@module",
+    "@packageDocumentation",
+    "@cause",
+    "@retryable",
+    "@handling",
+    "@default"
+  ],
+  "validation": {
+    "invalidLink": true,
+    "notExported": true
+  },
+  "sidebarLinks": {
+    "GitHub": "https://github.com/Vero-protocol/vero-sdk",
+    "Contributing": "https://github.com/Vero-protocol/vero-sdk/blob/main/CONTRIBUTING.md"
+  }
+}
