@@ -5,7 +5,7 @@
  * Amounts are always in stroops (bigint), never floats.
  */
 
-import { BalanceLine, AccountBalance } from './types';
+import { BalanceLine, AccountBalance } from './types.js';
 
 /**
  * Native asset code for Stellar

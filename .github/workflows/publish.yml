@@ -1,0 +1,51 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  ci:
+    name: Full CI
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to npm
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci
+
+      - name: Verify tag matches package version
+        run: |
+          PKG_TAG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG_TAG" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package version $PKG_TAG"
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke-test package entry points (CJS + ESM)
+        run: npm run test:package
+
+      - name: Check bundle-size budget
+        run: npm run size
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

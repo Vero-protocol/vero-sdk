@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 jobs:
   build:
@@ -35,8 +36,40 @@ jobs:
       - name: Test
         run: npm run test:coverage
 
+      # Upload coverage from one matrix leg only — Codecov merges repeated
+      # uploads for the same commit, but a single report keeps it clean.
+      # fail_ci_if_error is off so PRs from forks (which don't receive the
+      # upstream CODECOV_TOKEN secret) are never blocked by the upload.
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          fail_ci_if_error: false
+
       - name: Build
         run: npm run build
 
+      - name: Smoke-test package entry points (CJS + ESM)
+        run: npm run test:package
+
       - name: Check bundle-size budget
         run: npm run size
+
+  docs:
+    name: Generate API docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate API docs
+        run: npm run docs

@@ -1,7 +1,7 @@
 [
   {
     "name": "@vero-protocol/sdk",
-    "path": "dist/index.js",
+    "path": "dist/esm/index.js",
     "limit": "5 kB"
   }
 ]
