@@ -62,6 +62,7 @@ Match the pattern the issue specifies. Generally:
   string-match. If you need a new category, add it to the enum.
 - **Never widen endpoint validation.** `src/network/validateUrl` enforces HTTPS
   deliberately; see the note in that file for why.
+- **DataKey synchronization.** The SDK mirrors `DataKey` from `vero-core-contracts/src/contracts/storage_layout.rs`. If the contract changes these keys, you must update `src/types/index.ts` to match. A test ensures these stay in sync; if you are updating keys, ensure you have the `vero-core-contracts` repository cloned adjacent to `vero-sdk` so the test can verify the change.
 - **Build request URLs with `new URL()`**, never string concatenation. A crafted
   path must not be able to escape the endpoint origin.
 - **Document the "why", not the "what".** A comment explaining a non-obvious
