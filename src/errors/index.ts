@@ -183,6 +183,7 @@ export function normalizeError(err: unknown, fallback = VeroErrorCode.Unknown): 
     return new VeroError(VeroErrorCode.UserRejected, 'Request was rejected in the wallet', err);
   }
 
+  
   if (lower.includes('tx_bad_seq') || lower.includes('bad sequence')) {
     return new VeroError(
       VeroErrorCode.BadSequence,

@@ -4,6 +4,7 @@ describe('normalizeError', () => {
   it('passes a VeroError through unchanged', () => {
     const original = new VeroError(VeroErrorCode.BadSequence, 'stale');
     expect(normalizeError(original)).toBe(original);
+
   });
 
   it.each([
@@ -60,4 +61,5 @@ describe('normalizeError', () => {
     expect(normalizeError(new Error('x'))).toBeInstanceOf(VeroError);
     expect(normalizeError(new Error('x'))).toBeInstanceOf(Error);
   });
+  
 });
