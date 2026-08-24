@@ -13,6 +13,7 @@
  */
 
 import { AccountLockManager } from './lock.js';
+import { VeroError, VeroErrorCode, normalizeError } from '../errors/index.js';
 
 /** Minimal interface for fetching the on-chain sequence number of an account. */
 export interface SequenceFetcher {
@@ -30,9 +31,14 @@ export interface NonceManagerOptions {
   fetcher: SequenceFetcher;
   /**
    * Maximum time (ms) to wait to acquire the per-account lock.
-   * @default undefined (wait indefinitely)
+   * @default 5000
    */
   lockTimeoutMs?: number;
+  /**
+   * Maximum time (ms) to wait for the fetcher to resolve.
+   * @default 5000
+   */
+  fetchTimeoutMs?: number;
 }
 
 /**
@@ -44,14 +50,34 @@ export interface NonceManagerOptions {
 export class NonceManager {
   private readonly lock = new AccountLockManager();
   private readonly fetcher: SequenceFetcher;
-  private readonly lockTimeoutMs: number | undefined;
+  private readonly lockTimeoutMs: number;
+  private readonly fetchTimeoutMs: number;
 
   /** Per-account in-memory sequence counters. */
   private readonly sequences = new Map<string, bigint>();
 
   constructor(opts: NonceManagerOptions) {
     this.fetcher = opts.fetcher;
-    this.lockTimeoutMs = opts.lockTimeoutMs;
+    this.lockTimeoutMs = opts.lockTimeoutMs ?? 5000;
+    this.fetchTimeoutMs = opts.fetchTimeoutMs ?? 5000;
+  }
+
+  private async fetchWithTimeout(account: string): Promise<bigint> {
+    return new Promise<bigint>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new VeroError(VeroErrorCode.RpcTimeout, 'Fetcher timed out'));
+      }, this.fetchTimeoutMs);
+
+      this.fetcher.fetchSequence(account)
+        .then((res) => {
+          clearTimeout(timer);
+          resolve(res);
+        })
+        .catch((err) => {
+          clearTimeout(timer);
+          reject(normalizeError(err));
+        });
+    });
   }
 
   /**
@@ -74,7 +100,7 @@ export class NonceManager {
           // First reservation — fetch the on-chain baseline.
           // Note: we fetch inside the lock to avoid the cached-sequence race
           // documented in vero-relayer-service#198.
-          seq = await this.fetcher.fetchSequence(account);
+          seq = await this.fetchWithTimeout(account);
         }
         const next = seq + 1n;
         this.sequences.set(account, next);
@@ -98,7 +124,7 @@ export class NonceManager {
     await this.lock.withLock(
       account,
       async () => {
-        const seq = await this.fetcher.fetchSequence(account);
+        const seq = await this.fetchWithTimeout(account);
         this.sequences.set(account, seq);
       },
       this.lockTimeoutMs,
