@@ -151,4 +151,39 @@ describe('RpcClient', () => {
     client.resetHealth();
     expect(client.health()[0]?.healthy).toBe(true);
   });
+
+  // Regression guard for #74: a fresh clock reading must be taken per
+  // endpoint attempt so the *last* (most stale) endpoint isn't quarantined
+  // into the past when the failover loop runs longer than `quarantineMs`.
+  it('keeps the last attempted endpoint quarantined when the loop outlives quarantineMs (#74)', async () => {
+    jest.useFakeTimers();
+    let clock = 1_000_000;
+    jest.setSystemTime(clock);
+
+    const fetchImpl = jest.fn(async () => {
+      clock += 20_000;
+      jest.setSystemTime(clock);
+      throw new Error('ECONNREFUSED');
+    });
+
+    const client = new RpcClient({
+      endpoints: ['https://a.example', 'https://b.example', 'https://c.example'],
+      fetchImpl,
+      failureThreshold: 1,
+      quarantineMs: 30_000,
+    });
+
+    await expect(client.request('/x')).rejects.toThrow(VeroError);
+
+    const health = client.health();
+    expect(health).toHaveLength(3);
+    // The final endpoint was penalised last, when the clock was ~60s ahead of
+    // the pre-loop timestamp. With the bug its quarantine (based on the stale
+    // pre-loop clock) would already be in the past, so it would report
+    // healthy again immediately after the request. Each earlier endpoint was
+    // penalised earlier and may legitimately have already recovered.
+    expect(health[2]?.healthy).toBe(false);
+
+    jest.useRealTimers();
+  });
 });
