@@ -56,6 +56,33 @@ describe('Account Data', () => {
       // Buffer.from with base64 doesn't throw for invalid input
       expect(typeof result?.value).toBe('string');
     });
+
+    it('flags non-base64 input as invalid (#70)', () => {
+      const data = { k: '!!!not base64!!!' };
+      const result = readDataEntry(data, 'k');
+      expect(result).toBeDefined();
+      expect(result?.key).toBe('k');
+      expect(result?.isValid).toBe(false);
+      expect(result?.value).toBe('');
+    });
+
+    it('keeps a valid base64 UTF-8 entry valid with the correct value (#70)', () => {
+      const data = { k: Buffer.from('hello world').toString('base64') };
+      const result = readDataEntry(data, 'k');
+      expect(result?.isValid).toBe(true);
+      expect(result?.value).toBe('hello world');
+    });
+
+    it('flags valid base64 that is not valid UTF-8 as invalid (#70)', () => {
+      const nonUtf8 = Buffer.from([0x80, 0x81, 0x82]).toString('base64');
+      const result = readDataEntry({ k: nonUtf8 }, 'k');
+      expect(result?.isValid).toBe(false);
+    });
+
+    it('getReputation returns null for an entry failing the validity check (#70)', () => {
+      const data = { [DataKey.Reputation]: '!!!not base64!!!' };
+      expect(getReputation(data)).toBeNull();
+    });
   });
 
   describe('getReputation', () => {
