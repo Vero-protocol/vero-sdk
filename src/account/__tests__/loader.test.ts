@@ -62,9 +62,11 @@ describe('AccountLoader', () => {
         { type: 'http', status: 404, body: { title: 'Resource Missing', status: 404 } },
       );
 
-      await expect(
-        loader.loadAccount(mockHorizonUrl, 'missing123')
-      ).rejects.toThrow(AccountNotFoundError);
+      const promise = loader.loadAccount(mockHorizonUrl, 'missing123');
+      await expect(promise).rejects.toThrow(VeroError);
+      await expect(promise).rejects.toMatchObject({
+        code: VeroErrorCode.AccountNotFound,
+      });
     });
 
     it('should handle network errors', async () => {
@@ -73,9 +75,11 @@ describe('AccountLoader', () => {
         { type: 'network', error: new Error('Network error') },
       );
 
-      await expect(
-        loader.loadAccount(mockHorizonUrl, 'test456')
-      ).rejects.toThrow('Failed to load account test456');
+      const promise = loader.loadAccount(mockHorizonUrl, 'test456');
+      await expect(promise).rejects.toThrow(VeroError);
+      await expect(promise).rejects.toMatchObject({
+        code: VeroErrorCode.RpcRequestFailed,
+      });
     });
 
     it('should handle Horizon 500 error', async () => {
@@ -84,9 +88,61 @@ describe('AccountLoader', () => {
         { type: 'http', status: 500 },
       );
 
-      await expect(
-        loader.loadAccount(mockHorizonUrl, 'test789')
-      ).rejects.toThrow('Failed to load account test789');
+      const promise = loader.loadAccount(mockHorizonUrl, 'test789');
+      await expect(promise).rejects.toThrow(VeroError);
+      await expect(promise).rejects.toMatchObject({
+        code: VeroErrorCode.RpcRequestFailed,
+      });
+    });
+  });
+
+  describe('security and URL validation', () => {
+    it('loadAccount("http://evil.example", ...) throws VeroError with code INVALID_URL', async () => {
+      const promise = loader.loadAccount('http://evil.example', 'GABC123');
+      await expect(promise).rejects.toThrow(VeroError);
+      await expect(promise).rejects.toMatchObject({
+        code: VeroErrorCode.InvalidUrl,
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('encodes publicKey so ../ledgers/1 does not escape /accounts/', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ account_id: '../ledgers/1', sequence: '1' }),
+      });
+
+      await loader.loadAccount(mockHorizonUrl, '../ledgers/1');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const requestedUrl = mockFetch.mock.calls[0][0];
+      expect(requestedUrl).toBe(
+        'https://horizon-testnet.stellar.org/accounts/..%2Fledgers%2F1'
+      );
+    });
+
+    it('a stubbed fetch that never resolves causes loadAccount to reject within timeout', async () => {
+      const neverEndingFetch = jest.fn((_url: string, init?: RequestInit) => {
+        return new Promise((_, reject) => {
+          if (init?.signal) {
+            init.signal.addEventListener('abort', () => {
+              const err = new Error('The operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          }
+        });
+      });
+
+      const promise = loader.loadAccount(mockHorizonUrl, 'GABC123', {
+        timeoutMs: 50,
+        fetchImpl: neverEndingFetch as unknown as typeof fetch,
+      });
+
+      await expect(promise).rejects.toThrow(VeroError);
+      await expect(promise).rejects.toMatchObject({
+        code: VeroErrorCode.RpcTimeout,
+      });
     });
   });
 

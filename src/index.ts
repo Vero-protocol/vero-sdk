@@ -13,3 +13,4 @@ export * from './network/index.js';
 export * from './rpc/index.js';
 export * from './nonce/index.js';
 export * from './resilience/backoff.js';
+export * from './events/index.js';

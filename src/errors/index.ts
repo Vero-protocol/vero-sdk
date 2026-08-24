@@ -157,6 +157,12 @@ export class VeroError extends Error {
 export function normalizeError(err: unknown, fallback = VeroErrorCode.Unknown): VeroError {
   if (err instanceof VeroError) return err;
 
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    if ((err as { code: unknown }).code === 4001) {
+      return new VeroError(VeroErrorCode.UserRejected, 'Request was rejected in the wallet', err);
+    }
+  }
+
   const message =
     err instanceof Error
       ? err.message
@@ -171,11 +177,13 @@ export function normalizeError(err: unknown, fallback = VeroErrorCode.Unknown): 
     lower.includes('user declined') ||
     lower.includes('user rejected') ||
     lower.includes('request was rejected') ||
-    lower.includes('denied')
+    lower.includes('user denied') ||
+    lower.includes('denied by user')
   ) {
     return new VeroError(VeroErrorCode.UserRejected, 'Request was rejected in the wallet', err);
   }
 
+  
   if (lower.includes('tx_bad_seq') || lower.includes('bad sequence')) {
     return new VeroError(
       VeroErrorCode.BadSequence,

@@ -4,15 +4,23 @@ describe('normalizeError', () => {
   it('passes a VeroError through unchanged', () => {
     const original = new VeroError(VeroErrorCode.BadSequence, 'stale');
     expect(normalizeError(original)).toBe(original);
+
   });
 
   it.each([
     'User declined the request',
     'User rejected the transaction',
     'The request was rejected by the user',
-    'Signature denied',
+    'User denied the signature',
   ])('classifies wallet cancellation: %s', (msg) => {
     expect(normalizeError(new Error(msg)).code).toBe(VeroErrorCode.UserRejected);
+  });
+
+  it.each([
+    'permission denied',
+    'access denied',
+  ])('does not classify infrastructure failures as wallet cancellation: %s', (msg) => {
+    expect(normalizeError(new Error(msg)).code).not.toBe(VeroErrorCode.UserRejected);
   });
 
   it('classifies a stale sequence number', () => {
@@ -53,4 +61,5 @@ describe('normalizeError', () => {
     expect(normalizeError(new Error('x'))).toBeInstanceOf(VeroError);
     expect(normalizeError(new Error('x'))).toBeInstanceOf(Error);
   });
+  
 });

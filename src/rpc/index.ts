@@ -115,11 +115,15 @@ export class RpcClient {
    * @throws {VeroError} `ALL_ENDPOINTS_FAILED` when no endpoint succeeded.
    */
   async request<T = unknown>(path: string, init?: RequestInit): Promise<T> {
-    const now = Date.now();
-    const pool = this.available(now);
+    const selectNow = Date.now();
+    const pool = this.available(selectNow);
     const failures: string[] = [];
 
     for (const ep of pool) {
+      // Capture a fresh clock reading for each endpoint attempt. Reusing a
+      // single pre-loop timestamp let quarantines expire early (or land in the
+      // past) when the endpoint loop ran longer than `quarantineMs`.
+      const now = Date.now();
       // Build via URL so a crafted `path` can't redirect to another host.
       // Naive concatenation is how vero-audit-guard#302 happened.
       const target = new URL(path.replace(/^\/+/, ''), ep.url + '/');
