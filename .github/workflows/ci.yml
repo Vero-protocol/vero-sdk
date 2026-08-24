@@ -35,6 +35,18 @@ jobs:
       - name: Test
         run: npm run test:coverage
 
+      # Upload coverage from one matrix leg only — Codecov merges repeated
+      # uploads for the same commit, but a single report keeps it clean.
+      # fail_ci_if_error is off so PRs from forks (which don't receive the
+      # upstream CODECOV_TOKEN secret) are never blocked by the upload.
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          fail_ci_if_error: false
+
       - name: Build
         run: npm run build
 

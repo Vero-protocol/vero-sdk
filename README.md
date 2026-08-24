@@ -1,5 +1,7 @@
 # Vero SDK
 
+[![codecov](https://codecov.io/gh/Vero-protocol/vero-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/Vero-protocol/vero-sdk)
+
 Shared Stellar client library for the [Vero Protocol](https://github.com/Vero-protocol).
 
 ## Why this exists
