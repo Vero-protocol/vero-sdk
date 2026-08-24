@@ -14,7 +14,7 @@
  *     hanging forever, without leaving the lock held for the next waiter.
  */
 
-import { VeroError, VeroErrorCode } from '../errors';
+import { VeroError, VeroErrorCode } from '../errors/index.js';
 
 interface Waiter {
   resolve: () => void;

@@ -39,10 +39,13 @@ npm run test:watch    # re-run on change
 npm run test:coverage # with a coverage report
 npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
-npm run build         # emit dist/
+npm run build         # emit dist/ (CJS + ESM + declarations)
+npm run test:package  # verify both formats resolve (requires build)
+npm run size          # check the browser bundle-size budget (requires build)
+npm run docs          # generate the API reference into docs/
 ```
 
-All four of test, typecheck, lint, and build must pass before a PR can merge.
+All of test, typecheck, lint, and build must pass before a PR can merge. Documentation generation (`npm run docs`) also runs in CI and fails the job if TypeDoc reports an error.
 
 ## Branch naming
 
@@ -74,6 +77,47 @@ before, add a regression test that fails without the fix and reference the
 original issue in a comment — several tests in this repo do this already.
 
 Coverage thresholds are enforced in CI (`jest.config.js`).
+
+## Releases
+
+Releases are tag-driven: CI runs first, and npm only ever receives a build that
+passed it. Maintainers only — but the procedure is documented so anyone can
+follow along or reproduce a release locally.
+
+One-time setup (maintainers with repo admin):
+
+- Add an npm **automation** token as the `NPM_TOKEN` repository secret
+  (Settings → Secrets and variables → Actions). Publish is blocked without it.
+
+To cut a release:
+
+1. Bump the version on a branch and merge to `main`:
+
+   ```bash
+   npm version <patch|minor|major> --no-git-tag-version
+   ```
+
+   Commit `package.json` / `package-lock.json` and open a PR. Do not proceed
+   until it is merged — the published version must match `main`.
+
+2. Tag the merge commit on `main` and push the tag:
+
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+3. The `Publish` workflow then:
+   - runs the full CI workflow (typecheck, lint, tests, build, package smoke
+     test, bundle-size budget) against the tagged commit;
+   - verifies the tag equals `v` + `package.json` version;
+   - rebuilds from scratch, re-runs the smoke test, and publishes to npm with
+     [provenance](https://docs.npmjs.com/generating-provenance-statements)
+     (`npm publish --provenance --access public`).
+
+If any step fails, nothing is published; fix on `main`, then move or recreate
+the tag (`git tag -f`). Verify the result with
+`npm view @vero-protocol/sdk version` once the run completes.
 
 ## Reporting bugs
 

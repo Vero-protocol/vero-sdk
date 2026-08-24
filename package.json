@@ -11,8 +11,19 @@
   "bugs": {
     "url": "https://github.com/Vero-protocol/vero-sdk/issues"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/cjs/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
   "files": [
     "dist"
   ],
@@ -20,12 +31,19 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build:cjs": "tsc -p tsconfig.build.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build": "npm run build:cjs && npm run build:esm && node scripts/write-dist-manifests.mjs",
+    "prepublishOnly": "npm run build && npm run test:package",
+    "test:package": "node scripts/smoke-test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "size": "size-limit",
+    "docs": "typedoc"
   },
   "keywords": [
     "stellar",
@@ -35,13 +53,16 @@
     "sdk"
   ],
   "devDependencies": {
+    "@size-limit/preset-small-lib": "12.1.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
     "jest": "^30.0.0",
+    "size-limit": "12.1.0",
     "ts-jest": "^29.2.0",
+    "typedoc": "^0.28.20",
     "typescript": "^5.6.0"
   },
   "dependencies": {

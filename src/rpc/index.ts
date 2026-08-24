@@ -13,9 +13,9 @@
  * endpoints out of rotation. See vero-core-engine#182.
  */
 
-import { VeroError, VeroErrorCode, normalizeError } from '../errors';
-import { validateUrl, type ValidateUrlOptions } from '../network';
-import type { Logger } from '../types';
+import { VeroError, VeroErrorCode, normalizeError } from '../errors/index.js';
+import { validateUrl, type ValidateUrlOptions } from '../network/index.js';
+import type { Logger } from '../types/index.js';
 
 export interface RpcEndpoint {
   url: string;
