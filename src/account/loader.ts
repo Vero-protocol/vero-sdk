@@ -9,9 +9,10 @@
 import {
   HorizonAccount,
   LoadAccountOptions,
-  AccountNotFoundError,
   BalanceLine,
 } from './types.js';
+import { validateUrl } from '../network/index.js';
+import { VeroError, VeroErrorCode, normalizeError } from '../errors/index.js';
 
 /**
  * Account cache entry
@@ -36,7 +37,7 @@ export class AccountLoader {
    * @param publicKey - The public key of the account to load
    * @param opts - Load options
    * @returns The Horizon account data
-   * @throws {AccountNotFoundError} If the account does not exist
+   * @throws {VeroError} If the URL is invalid, request fails, or account is not found
    */
   async loadAccount(
     horizonUrl: string,
@@ -47,7 +48,7 @@ export class AccountLoader {
 
     // If skipCache is explicitly requested, bypass cache entirely
     if (skipCache) {
-      return this.fetchAccount(horizonUrl, publicKey);
+      return this.fetchAccount(horizonUrl, publicKey, opts);
     }
 
     // Check cache if enabled
@@ -59,7 +60,7 @@ export class AccountLoader {
     }
 
     // Fetch from network
-    const account = await this.fetchAccount(horizonUrl, publicKey);
+    const account = await this.fetchAccount(horizonUrl, publicKey, opts);
 
     // Store in cache if enabled
     if (cache) {
@@ -74,26 +75,64 @@ export class AccountLoader {
    */
   private async fetchAccount(
     horizonUrl: string,
-    publicKey: string
+    publicKey: string,
+    opts: LoadAccountOptions = {}
   ): Promise<HorizonAccount> {
+    const timeoutMs = opts.timeoutMs ?? 10_000;
+    const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+
+    if (typeof fetchImpl !== 'function') {
+      throw new VeroError(
+        VeroErrorCode.RpcRequestFailed,
+        'No fetch implementation available — pass fetchImpl explicitly'
+      );
+    }
+
+    const baseUrl = validateUrl(horizonUrl, opts.urlOptions);
+    const base = baseUrl.toString().endsWith('/') ? baseUrl.toString() : `${baseUrl.toString()}/`;
+    const targetUrl = new URL(`accounts/${encodeURIComponent(publicKey)}`, base);
+
+    if (targetUrl.origin !== baseUrl.origin) {
+      throw new VeroError(
+        VeroErrorCode.InvalidUrl,
+        `Request path for public key "${publicKey}" would escape endpoint origin ${horizonUrl}`
+      );
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      const url = `${horizonUrl}/accounts/${publicKey}`;
-      const response = await fetch(url);
-      
+      const response = await fetchImpl(targetUrl.toString(), {
+        signal: controller.signal,
+      });
+
       if (!response.ok) {
         if (response.status === 404) {
-          throw new AccountNotFoundError(publicKey);
+          throw new VeroError(
+            VeroErrorCode.AccountNotFound,
+            `Account not found: ${publicKey}`
+          );
         }
-        throw new Error(`Horizon error: ${response.status} ${response.statusText}`);
+        throw new VeroError(
+          VeroErrorCode.RpcRequestFailed,
+          `Horizon error: ${response.status} ${response.statusText}`
+        );
       }
 
       const data = await response.json();
       return this.normalizeAccount(data);
     } catch (error) {
-      if (error instanceof AccountNotFoundError) {
-        throw error;
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new VeroError(
+          VeroErrorCode.RpcTimeout,
+          `Request timed out after ${timeoutMs}ms`,
+          error
+        );
       }
-      throw new Error(`Failed to load account ${publicKey}: ${error}`);
+      throw normalizeError(error, VeroErrorCode.RpcRequestFailed);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -130,9 +169,10 @@ export class AccountLoader {
    */
   async refreshCache(
     horizonUrl: string,
-    publicKey: string
+    publicKey: string,
+    opts: LoadAccountOptions = {}
   ): Promise<HorizonAccount> {
-    const account = await this.fetchAccount(horizonUrl, publicKey);
+    const account = await this.fetchAccount(horizonUrl, publicKey, opts);
     this.cache.delete(publicKey);
     return account;
   }
