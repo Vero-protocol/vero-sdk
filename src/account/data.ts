@@ -19,6 +19,13 @@ export const DataKey = {
 export type DataKey = typeof DataKey[keyof typeof DataKey];
 
 /**
+ * Strip trailing base64 padding so two equivalent encodings compare equal.
+ */
+function stripPadding(s: string): string {
+  return s.replace(/=+$/, '');
+}
+
+/**
  * Read and decode an account data entry.
  *
  * @param data - The account data map from Horizon
@@ -34,23 +41,25 @@ export function readDataEntry(
     return null;
   }
 
+  // `Buffer.from(raw, 'base64')` is lossy: it silently discards characters
+  // that are not valid base64 and never throws. Re-encode the decoded bytes
+  // and compare against the input to prove `raw` was genuinely valid base64
+  // before trusting it. Without this, the validity flag was always `true`.
+  const decoded = Buffer.from(raw, 'base64');
+  const isBase64 = stripPadding(decoded.toString('base64')) === stripPadding(raw);
+
+  if (!isBase64) {
+    return { key, raw, value: '', isValid: false };
+  }
+
+  // Even valid base64 may encode bytes that are not valid UTF-8. `toString`
+  // would silently substitute U+FFFD, so decode with a fatal TextDecoder and
+  // treat lossy output as invalid.
   try {
-    // Decode base64
-    const decoded = Buffer.from(raw, 'base64').toString('utf-8');
-    return {
-      key,
-      raw,
-      value: decoded,
-      isValid: true,
-    };
+    const value = new TextDecoder('utf-8', { fatal: true }).decode(decoded);
+    return { key, raw, value, isValid: true };
   } catch {
-    // Invalid base64 or non-UTF8 content
-    return {
-      key,
-      raw,
-      value: '',
-      isValid: false,
-    };
+    return { key, raw, value: '', isValid: false };
   }
 }
 

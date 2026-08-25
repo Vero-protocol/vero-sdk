@@ -12,8 +12,12 @@ export type NetworkName = 'testnet' | 'mainnet' | 'custom';
 /** Roles recognised by the contract's RBAC module. */
 export enum Role {
   Admin = 'Admin',
+  GuardianManager = 'GuardianManager',
   Guardian = 'Guardian',
   TaskManager = 'TaskManager',
+  ConfigManager = 'ConfigManager',
+  EmergencyManager = 'EmergencyManager',
+  TreasuryManager = 'TreasuryManager',
 }
 
 /**
