@@ -13,7 +13,7 @@ export { AccountLoader, accountLoader } from './loader.js';
 
 // Data
 export {
-  DataKey,
+  AccountDataKey,
   readDataEntry,
   getReputation,
   getMetadata,
