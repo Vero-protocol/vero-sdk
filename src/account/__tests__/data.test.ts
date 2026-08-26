@@ -3,7 +3,7 @@
  */
 
 import {
-  DataKey,
+  AccountDataKey,
   readDataEntry,
   getReputation,
   getMetadata,
@@ -80,7 +80,7 @@ describe('Account Data', () => {
     });
 
     it('getReputation returns null for an entry failing the validity check (#70)', () => {
-      const data = { [DataKey.Reputation]: '!!!not base64!!!' };
+      const data = { [AccountDataKey.Reputation]: '!!!not base64!!!' };
       expect(getReputation(data)).toBeNull();
     });
   });
@@ -88,7 +88,7 @@ describe('Account Data', () => {
   describe('getReputation', () => {
     it('should parse valid reputation data', () => {
       const data = {
-        [DataKey.Reputation]: Buffer.from(
+        [AccountDataKey.Reputation]: Buffer.from(
           JSON.stringify({ score: 250, metadata: { contributions: 5 } })
         ).toString('base64'),
       };
@@ -106,7 +106,7 @@ describe('Account Data', () => {
 
     it('should handle invalid reputation JSON gracefully', () => {
       const data = {
-        [DataKey.Reputation]: Buffer.from('invalid json').toString('base64'),
+        [AccountDataKey.Reputation]: Buffer.from('invalid json').toString('base64'),
       };
       const result = getReputation(data);
       expect(result).toBeNull();
@@ -114,7 +114,7 @@ describe('Account Data', () => {
 
     it('should handle reputation with missing score', () => {
       const data = {
-        [DataKey.Reputation]: Buffer.from(
+        [AccountDataKey.Reputation]: Buffer.from(
           JSON.stringify({ metadata: { contributions: 5 } })
         ).toString('base64'),
       };
@@ -136,7 +136,7 @@ describe('Account Data', () => {
 
       for (const { score, tier } of testCases) {
         const data = {
-          [DataKey.Reputation]: Buffer.from(
+          [AccountDataKey.Reputation]: Buffer.from(
             JSON.stringify({ score })
           ).toString('base64'),
         };
@@ -149,7 +149,7 @@ describe('Account Data', () => {
   describe('getMetadata', () => {
     it('should parse valid metadata', () => {
       const data = {
-        [DataKey.Metadata]: Buffer.from(
+        [AccountDataKey.Metadata]: Buffer.from(
           JSON.stringify({ name: 'test', version: 1 })
         ).toString('base64'),
       };
@@ -167,7 +167,7 @@ describe('Account Data', () => {
 
     it('should handle invalid metadata JSON', () => {
       const data = {
-        [DataKey.Metadata]: Buffer.from('invalid json').toString('base64'),
+        [AccountDataKey.Metadata]: Buffer.from('invalid json').toString('base64'),
       };
       const result = getMetadata(data);
       expect(result).toBeNull();
@@ -175,7 +175,7 @@ describe('Account Data', () => {
 
     it('should handle malformed metadata base64', () => {
       const data = {
-        [DataKey.Metadata]: 'not-valid-base64!',
+        [AccountDataKey.Metadata]: 'not-valid-base64!',
       };
       const result = getMetadata(data);
       expect(result).toBeNull();
@@ -185,7 +185,7 @@ describe('Account Data', () => {
   describe('getProfile', () => {
     it('should parse valid profile', () => {
       const data = {
-        [DataKey.Profile]: Buffer.from(
+        [AccountDataKey.Profile]: Buffer.from(
           JSON.stringify({ name: 'testuser', email: 'test@example.com' })
         ).toString('base64'),
       };
@@ -203,7 +203,7 @@ describe('Account Data', () => {
 
     it('should handle invalid profile JSON', () => {
       const data = {
-        [DataKey.Profile]: Buffer.from('invalid json').toString('base64'),
+        [AccountDataKey.Profile]: Buffer.from('invalid json').toString('base64'),
       };
       const result = getProfile(data);
       expect(result).toBeNull();

@@ -9,7 +9,7 @@ describe('Account module index', () => {
     // Check that all expected exports exist
     expect(account.AccountLoader).toBeDefined();
     expect(account.accountLoader).toBeDefined();
-    expect(account.DataKey).toBeDefined();
+    expect(account.AccountDataKey).toBeDefined();
     expect(account.readDataEntry).toBeDefined();
     expect(account.getReputation).toBeDefined();
     expect(account.getMetadata).toBeDefined();
