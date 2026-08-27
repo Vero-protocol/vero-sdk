@@ -16,6 +16,7 @@ import {
   subtractStroops,
   NATIVE_ASSET,
 } from '../balances';
+import { VeroError } from '../../errors/index';
 
 describe('Balances', () => {
   describe('amountToStroops', () => {
@@ -35,8 +36,19 @@ describe('Balances', () => {
       expect(amountToStroops('1.123456789')).toBe(11234567n);
     });
 
-    it('should handle invalid amounts gracefully', () => {
-      expect(amountToStroops('invalid')).toBe(0n);
+    it('should handle negative amounts', () => {
+      expect(amountToStroops('-1')).toBe(-10000000n);
+      expect(amountToStroops('-0.5')).toBe(-5000000n);
+      expect(amountToStroops('-0.0000001')).toBe(-1n);
+    });
+
+    it('should throw on invalid amount formats', () => {
+      expect(() => amountToStroops('invalid')).toThrow(VeroError);
+      expect(() => amountToStroops('1e5')).toThrow(VeroError);
+      expect(() => amountToStroops('1.2.3')).toThrow(VeroError);
+      expect(() => amountToStroops('')).toThrow(VeroError);
+      expect(() => amountToStroops('abc123')).toThrow(VeroError);
+      expect(() => amountToStroops('1e-5')).toThrow(VeroError);
     });
   });
 
@@ -49,10 +61,29 @@ describe('Balances', () => {
       expect(stroopsToAmount(0n)).toBe('0');
     });
 
-    it('should round-trip correctly', () => {
+    it('should handle negative stroops', () => {
+      expect(stroopsToAmount(-1n)).toBe('-0.0000001');
+      expect(stroopsToAmount(-10000000n)).toBe('-1');
+      expect(stroopsToAmount(-15000000n)).toBe('-1.5');
+      expect(stroopsToAmount(-1234567n)).toBe('-0.1234567');
+    });
+
+    it('should round-trip correctly for positive amounts', () => {
       const amount = '123.456789';
       const stroops = amountToStroops(amount);
       expect(stroopsToAmount(stroops)).toBe(amount);
+    });
+
+    it('should round-trip correctly for negative amounts', () => {
+      const testCases = ['-1', '-0.5', '-100.123456', '-0.0000001'];
+      testCases.forEach((amount) => {
+        const stroops = amountToStroops(amount);
+        expect(stroopsToAmount(stroops)).toBe(amount);
+      });
+    });
+
+    it('should round-trip correctly for zero', () => {
+      expect(stroopsToAmount(amountToStroops('0'))).toBe('0');
     });
   });
 

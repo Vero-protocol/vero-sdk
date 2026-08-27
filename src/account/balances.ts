@@ -6,6 +6,7 @@
  */
 
 import { BalanceLine, AccountBalance } from './types.js';
+import { VeroError, VeroErrorCode } from '../errors/index.js';
 
 /**
  * Native asset code for Stellar
@@ -91,17 +92,35 @@ export function getAssetBalance(
  *
  * @param amount - The amount as a decimal string
  * @returns The amount in stroops as a bigint
+ * @throws VeroError if the amount format is invalid
  */
 export function amountToStroops(amount: string): bigint {
+  // Validate format: optional sign, digits, optional decimal point and more digits
+  const amountRegex = /^-?\d+(\.\d+)?$/;
+  if (!amountRegex.test(amount)) {
+    throw new VeroError(
+      VeroErrorCode.Unknown,
+      `Invalid amount format: "${amount}". Expected a decimal number (e.g., "100" or "50.25")`
+    );
+  }
+
+  const isNegative = amount.startsWith('-');
+  const absoluteAmount = isNegative ? amount.slice(1) : amount;
+  
   try {
-    const parts = amount.split('.');
+    const parts = absoluteAmount.split('.');
     const integerPart = parts[0] || '0';
     const fractionalPart = (parts[1] || '').padEnd(7, '0').slice(0, 7);
     
     const normalized = integerPart + fractionalPart;
-    return BigInt(normalized);
-  } catch {
-    return 0n;
+    const stroops = BigInt(normalized);
+    return isNegative ? -stroops : stroops;
+  } catch (err) {
+    throw new VeroError(
+      VeroErrorCode.Unknown,
+      `Failed to parse amount "${amount}" as stroops`,
+      err
+    );
   }
 }
 
@@ -112,10 +131,15 @@ export function amountToStroops(amount: string): bigint {
  * @returns The amount as a decimal string
  */
 export function stroopsToAmount(stroops: bigint): string {
-  const str = stroops.toString().padStart(8, '0');
+  const isNegative = stroops < 0n;
+  const absoluteStroops = isNegative ? -stroops : stroops;
+  
+  const str = absoluteStroops.toString().padStart(8, '0');
   const integerPart = str.slice(0, -7) || '0';
   const fractionalPart = str.slice(-7).replace(/0+$/, '');
-  return fractionalPart ? `${integerPart}.${fractionalPart}` : integerPart;
+  
+  const result = fractionalPart ? `${integerPart}.${fractionalPart}` : integerPart;
+  return isNegative ? `-${result}` : result;
 }
 
 /**
