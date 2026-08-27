@@ -34,6 +34,19 @@ describe('validateUrl', () => {
     expect(validateUrl('http://127.0.0.1:8000', { allowInsecureLocalhost: true }).hostname).toBe(
       '127.0.0.1',
     );
+    // Full 127.0.0.0/8 range — not just .1
+    expect(validateUrl('http://127.0.0.2:8000', { allowInsecureLocalhost: true }).hostname).toBe(
+      '127.0.0.2',
+    );
+    // IPv6 loopback — WHATWG URL parser always returns the bracketed form
+    expect(validateUrl('http://[::1]:8000', { allowInsecureLocalhost: true }).hostname).toBe(
+      '[::1]',
+    );
+  });
+
+  it('rejects http on loopback addresses unless opted in', () => {
+    expect(() => validateUrl('http://127.0.0.2:8000')).toThrow(VeroError);
+    expect(() => validateUrl('http://[::1]:8000')).toThrow(VeroError);
   });
 
   it('does not permit http on a remote host even when localhost is opted in', () => {

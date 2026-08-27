@@ -38,7 +38,20 @@ export const MAINNET: NetworkConfig = {
   network: 'mainnet',
 };
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+/**
+ * Returns true for hostnames that are loopback addresses:
+ * - "localhost"
+ * - IPv4 127.0.0.0/8 (e.g. 127.0.0.1, 127.0.0.2, …)
+ * - IPv6 [::1] (as returned by the WHATWG URL parser — always bracketed)
+ *
+ * Note: the WHATWG URL parser always brackets IPv6 addresses, so bare "::1"
+ * can never appear in `parsed.hostname` and is intentionally excluded here.
+ */
+function isLoopback(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '[::1]') return true;
+  // Match 127.x.x.x (the full 127.0.0.0/8 loopback range)
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname);
+}
 
 export interface ValidateUrlOptions {
   /**
@@ -69,7 +82,7 @@ export function validateUrl(url: string, opts: ValidateUrlOptions = {}): URL {
   if (parsed.protocol === 'https:') return parsed;
 
   if (parsed.protocol === 'http:') {
-    const isLocal = LOCAL_HOSTS.has(parsed.hostname);
+    const isLocal = isLoopback(parsed.hostname);
     if (isLocal && opts.allowInsecureLocalhost) return parsed;
 
     throw new VeroError(
