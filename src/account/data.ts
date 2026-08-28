@@ -8,15 +8,18 @@
 import { AccountDataEntry, ReputationData } from './types.js';
 
 /**
- * Data key constants
+ * Horizon account data-entry names.
+ *
+ * Named `AccountDataKey` so it does not collide with the contract storage
+ * `DataKey` in `src/types` when both are re-exported from the package root.
  */
-export const DataKey = {
+export const AccountDataKey = {
   Reputation: 'reputation',
   Metadata: 'metadata',
   Profile: 'profile',
 } as const;
 
-export type DataKey = typeof DataKey[keyof typeof DataKey];
+export type AccountDataKey = typeof AccountDataKey[keyof typeof AccountDataKey];
 
 /**
  * Strip trailing base64 padding so two equivalent encodings compare equal.
@@ -70,7 +73,7 @@ export function readDataEntry(
  * @returns The reputation data, or null if not found
  */
 export function getReputation(data: Record<string, string>): ReputationData | null {
-  const entry = readDataEntry(data, DataKey.Reputation);
+  const entry = readDataEntry(data, AccountDataKey.Reputation);
   if (!entry || !entry.isValid) {
     return null;
   }
@@ -105,7 +108,7 @@ function getReputationTier(score: number): 'bronze' | 'silver' | 'gold' | 'plati
  * Read metadata from account data.
  */
 export function getMetadata(data: Record<string, string>): Record<string, unknown> | null {
-  const entry = readDataEntry(data, DataKey.Metadata);
+  const entry = readDataEntry(data, AccountDataKey.Metadata);
   if (!entry || !entry.isValid) {
     return null;
   }
@@ -121,7 +124,7 @@ export function getMetadata(data: Record<string, string>): Record<string, unknow
  * Read profile data from account data.
  */
 export function getProfile(data: Record<string, string>): Record<string, unknown> | null {
-  const entry = readDataEntry(data, DataKey.Profile);
+  const entry = readDataEntry(data, AccountDataKey.Profile);
   if (!entry || !entry.isValid) {
     return null;
   }

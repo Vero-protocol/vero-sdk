@@ -18,19 +18,25 @@ const REQUIRED_EXPORTS = [
   'MAINNET',
   'retry',
   'defaultIsRetryable',
+  'AccountLoader',
+  'AccountDataKey',
 ];
 
 const DECLARATION_CHECKS = [
-  ['cjs', 'index.d.ts', /export \* from '\.\/(types|errors|network|rpc|nonce)\/index\.js'/],
+  ['cjs', 'index.d.ts', /export \* from '\.\/(types|errors|network|rpc|nonce|account)\/index\.js'/],
   ['cjs', 'index.d.ts', /export \* from '\.\/resilience\/backoff\.js'/],
+  ['cjs', 'index.d.ts', "export * from './account/index.js'"],
   ['cjs', 'errors/index.d.ts', 'VeroError'],
   ['cjs', 'rpc/index.d.ts', 'RpcClient'],
   ['cjs', 'nonce/index.d.ts', 'NonceManager'],
-  ['esm', 'index.d.ts', /export \* from '\.\/(types|errors|network|rpc|nonce)\/index\.js'/],
+  ['cjs', 'account/index.d.ts', 'AccountLoader'],
+  ['esm', 'index.d.ts', /export \* from '\.\/(types|errors|network|rpc|nonce|account)\/index\.js'/],
   ['esm', 'index.d.ts', /export \* from '\.\/resilience\/backoff\.js'/],
+  ['esm', 'index.d.ts', "export * from './account/index.js'"],
   ['esm', 'errors/index.d.ts', 'VeroError'],
   ['esm', 'rpc/index.d.ts', 'RpcClient'],
   ['esm', 'nonce/index.d.ts', 'NonceManager'],
+  ['esm', 'account/index.d.ts', 'AccountLoader'],
 ];
 
 function assert(condition, message) {
