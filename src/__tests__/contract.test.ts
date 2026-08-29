@@ -653,22 +653,75 @@ describe('contract writer', () => {
   it('retries transport failures without submitting the same sequence twice', async () => {
     const { rpc, request } = makeRpc();
     const { signer, sign } = makeSigner();
-    request
-      .mockRejectedValueOnce(new VeroError(VeroErrorCode.AllEndpointsFailed, 'temporary outage'))
-      .mockResolvedValueOnce({ hash: 'txhash', ledger: 124, successful: true });
+    const nonceManager = makeNonceManager([101n, 102n]);
+    let submitAttempts = 0;
+    request.mockImplementation(async (path) => {
+      if (path === '/contracts/CVERO/submit') {
+        submitAttempts += 1;
+        if (submitAttempts === 1) {
+          throw new VeroError(VeroErrorCode.AllEndpointsFailed, 'temporary outage');
+        }
+        return { hash: 'txhash', ledger: 124, successful: true };
+      }
+      throw new VeroError(VeroErrorCode.AccountNotFound, 'No submitted transaction found yet');
+    });
 
     const writer = createContractWriter({
       rpc,
       contractId: 'CVERO',
       signer,
-      nonceManager: makeNonceManager([101n, 102n]),
+      nonceManager,
       maxAttempts: 3,
     });
 
     await writer.vote({ guardian: 'GGUARDIAN', taskId: 42n });
 
-    expect(request).toHaveBeenCalledTimes(2);
-    expect(sign.mock.calls.map(([invocation]) => invocation.sequence)).toEqual([101n, 102n]);
+    const submitInits = request.mock.calls
+      .filter(([path]) => path === '/contracts/CVERO/submit')
+      .map(([, init]) => init);
+
+    expect(request.mock.calls.map(([path]) => path)).toEqual([
+      '/contracts/CVERO/submit',
+      expect.stringMatching(/^\/contracts\/CVERO\/submissions\/vero-submit-/),
+      '/contracts/CVERO/submit',
+    ]);
+    expect(sign.mock.calls.map(([invocation]) => invocation.sequence)).toEqual([101n]);
+    expect(nonceManager.reserve).toHaveBeenCalledTimes(1);
+
+    const firstBody = JSON.parse(String(submitInits[0]?.body));
+    const secondBody = JSON.parse(String(submitInits[1]?.body));
+    expect(secondBody).toEqual(firstBody);
+    expect((submitInits[0]?.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      firstBody.idempotencyKey,
+    );
+  });
+
+  it('returns a confirmed result from the idempotency status poll before retrying', async () => {
+    const { rpc, request } = makeRpc();
+    const { signer, sign } = makeSigner();
+    request
+      .mockRejectedValueOnce(new VeroError(VeroErrorCode.RpcTimeout, 'timeout'))
+      .mockResolvedValueOnce({ result: { hash: 'already-confirmed', ledger: 126, successful: true } });
+
+    const writer = createContractWriter({
+      rpc,
+      contractId: 'CVERO',
+      signer,
+      nonceManager: makeNonceManager([101n]),
+      maxAttempts: 3,
+    });
+
+    await expect(writer.vote({ guardian: 'GGUARDIAN', taskId: 42n })).resolves.toEqual({
+      hash: 'already-confirmed',
+      ledger: 126,
+      successful: true,
+    });
+
+    expect(request.mock.calls.map(([path]) => path)).toEqual([
+      '/contracts/CVERO/submit',
+      expect.stringMatching(/^\/contracts\/CVERO\/submissions\/vero-submit-/),
+    ]);
+    expect(sign).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes nonce before retrying a bad-sequence rejection', async () => {
@@ -696,13 +749,12 @@ describe('contract writer', () => {
   it('honors per-submit attempt caps and returns nested submit results', async () => {
     const { rpc, request } = makeRpc();
     const { signer, sign } = makeSigner();
-    request
-      .mockRejectedValueOnce(new VeroError(VeroErrorCode.RpcTimeout, 'timeout'))
-      .mockRejectedValueOnce(new VeroError(VeroErrorCode.RpcTimeout, 'timeout'))
-      .mockRejectedValueOnce(new VeroError(VeroErrorCode.RpcTimeout, 'timeout'))
-      .mockRejectedValueOnce(new VeroError(VeroErrorCode.RpcTimeout, 'timeout'))
-      .mockRejectedValueOnce(new VeroError(VeroErrorCode.RpcTimeout, 'timeout'))
-      .mockResolvedValue({ result: { hash: 'too-late', ledger: 1, successful: true } });
+    request.mockImplementation(async (path) => {
+      if (path === '/contracts/CVERO/submit') {
+        throw new VeroError(VeroErrorCode.RpcTimeout, 'timeout');
+      }
+      throw new VeroError(VeroErrorCode.AccountNotFound, 'No submitted transaction found yet');
+    });
 
     const writer = createContractWriter({
       rpc,
@@ -714,15 +766,25 @@ describe('contract writer', () => {
     await expect(writer.recordSnapshot({ maxAttempts: 99 })).rejects.toMatchObject({
       code: VeroErrorCode.RpcTimeout,
     });
-    expect(sign).toHaveBeenCalledTimes(5);
+    expect(request.mock.calls.filter(([path]) => path === '/contracts/CVERO/submit')).toHaveLength(5);
+    expect(request.mock.calls.filter(([path]) => path.includes('/submissions/'))).toHaveLength(4);
+    expect(sign).toHaveBeenCalledTimes(1);
   });
 
   it('uses the default attempt count for invalid submit attempt options', async () => {
     const { rpc, request } = makeRpc();
     const { signer, sign } = makeSigner();
-    request
-      .mockRejectedValueOnce(new VeroError(VeroErrorCode.RpcTimeout, 'timeout'))
-      .mockResolvedValueOnce({ result: { hash: 'txhash', ledger: 2, successful: true } });
+    let submitAttempts = 0;
+    request.mockImplementation(async (path) => {
+      if (path === '/contracts/CVERO/submit') {
+        submitAttempts += 1;
+        if (submitAttempts === 1) {
+          throw new VeroError(VeroErrorCode.RpcTimeout, 'timeout');
+        }
+        return { result: { hash: 'txhash', ledger: 2, successful: true } };
+      }
+      throw new VeroError(VeroErrorCode.AccountNotFound, 'No submitted transaction found yet');
+    });
 
     const writer = createContractWriter({
       rpc,
@@ -736,7 +798,12 @@ describe('contract writer', () => {
       ledger: 2,
       successful: true,
     });
-    expect(sign).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls.map(([path]) => path)).toEqual([
+      '/contracts/CVERO/submit',
+      expect.stringMatching(/^\/contracts\/CVERO\/submissions\/vero-submit-/),
+      '/contracts/CVERO/submit',
+    ]);
+    expect(sign).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry bad sequences without a nonce manager', async () => {
