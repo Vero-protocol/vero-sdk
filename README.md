@@ -147,6 +147,30 @@ Requires Node.js 20+.
 
 After merge to `main`, the generated reference can be published to GitHub Pages once Pages is set to deploy from GitHub Actions.
 
+## Testing with the mock server
+
+Tests that touch Horizon or Soroban RPC can use the mock server instead of
+hand-rolling `fetch` mocks. It serves realistic Horizon account records and
+Soroban JSON-RPC responses, and supports scripted failures (timeouts, 5xx,
+malformed bodies):
+
+```ts
+import { createMockServer } from '@vero-protocol/sdk/testing';
+
+const server = createMockServer();
+server.failNext('https://primary.example', { type: 'http', status: 503 });
+
+const rpc = new RpcClient({
+  endpoints: ['https://primary.example', 'https://backup.example'],
+  fetchImpl: server.fetch,
+});
+
+const account = await rpc.request('/accounts/GABC...'); // served from backup
+```
+
+The mock lives behind the `@vero-protocol/sdk/testing` subpath and is never
+part of the main bundle.
+
 ## Bundle-size budget
 
 This SDK is intended for browser applications, so consumer bundle size is a
