@@ -3,6 +3,8 @@ import type { ContractArgument, Decoder } from './types.js';
 
 export const simulatePath = (contractId: string): string => `/contracts/${contractId}/simulate`;
 export const submitPath = (contractId: string): string => `/contracts/${contractId}/submit`;
+export const submitStatusPath = (contractId: string, idempotencyKey: string): string =>
+  `/contracts/${contractId}/submissions/${encodeURIComponent(idempotencyKey)}`;
 
 export function toJsonCompatible(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString();

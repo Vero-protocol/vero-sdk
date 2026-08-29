@@ -27,11 +27,26 @@ import type {
   VoteBatchInput,
   VoteInput,
 } from './types.js';
-import { asBoolean, asNumber, asString, contractInteger, isRecord, submitPath, toJsonCompatible } from './wire.js';
+import {
+  asBoolean,
+  asNumber,
+  asString,
+  contractInteger,
+  isRecord,
+  submitPath,
+  submitStatusPath,
+  toJsonCompatible,
+} from './wire.js';
 import type { NonceManager } from '../nonce/index.js';
 
 const DEFAULT_MAX_ATTEMPTS = 2;
 const MAX_ATTEMPT_CAP = 5;
+const TRANSPORT_RETRY_DELAY_MS = 100;
+
+interface PreparedSubmitRequest {
+  idempotencyKey: string;
+  init: RequestInit;
+}
 
 export class VeroContractWriter {
   private readonly rpc: ContractRpcClient;
@@ -235,28 +250,11 @@ export class VeroContractWriter {
     const maxAttempts = clampAttempts(options.maxAttempts ?? this.defaultMaxAttempts);
     const signerAccount = await this.signer.publicKey();
     let lastError: VeroError | undefined;
+    let prepared = await this.prepareSubmitRequest(method, args, signerAccount);
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const sequence = this.nonceManager
-        ? await this.nonceManager.reserve(signerAccount)
-        : undefined;
-      const invocation: ContractInvocation = {
-        contractId: this.contractId,
-        method,
-        args,
-        ...(sequence === undefined ? {} : { sequence }),
-      };
-      const signed = await this.signer.sign(invocation);
-
       try {
-        const response = await this.rpc.request(submitPath(this.contractId), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            contractId: this.contractId,
-            signed: toJsonCompatible(signed),
-          }),
-        });
+        const response = await this.rpc.request(submitPath(this.contractId), prepared.init);
         return decodeSubmitResult(response);
       } catch (err) {
         const normalized = normalizeError(err, VeroErrorCode.TransactionFailed);
@@ -264,15 +262,72 @@ export class VeroContractWriter {
         if (normalized.code === VeroErrorCode.BadSequence) {
           if (!this.nonceManager || attempt >= maxAttempts) throw normalized;
           await this.nonceManager.refresh(signerAccount);
+          prepared = await this.prepareSubmitRequest(method, args, signerAccount);
           continue;
         }
         if (!isTransportRetry(normalized.code) || attempt >= maxAttempts) {
           throw normalized;
         }
+        const completed = await this.pollSubmittedResult(prepared.idempotencyKey);
+        if (completed) return completed;
+        await delay(TRANSPORT_RETRY_DELAY_MS * attempt);
       }
     }
 
     throw lastError ?? new VeroError(VeroErrorCode.Unknown, 'Contract submission did not run');
+  }
+
+  private async prepareSubmitRequest(
+    method: VeroWriteMethod,
+    args: readonly ContractArgument[],
+    signerAccount: string,
+  ): Promise<PreparedSubmitRequest> {
+    const sequence = this.nonceManager
+      ? await this.nonceManager.reserve(signerAccount)
+      : undefined;
+    const invocation: ContractInvocation = {
+      contractId: this.contractId,
+      method,
+      args,
+      ...(sequence === undefined ? {} : { sequence }),
+    };
+    const signed = await this.signer.sign(invocation);
+    const idempotencyKey = createIdempotencyKey();
+
+    return {
+      idempotencyKey,
+      init: {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          contractId: this.contractId,
+          idempotencyKey,
+          signed: toJsonCompatible(signed),
+        }),
+      },
+    };
+  }
+
+  private async pollSubmittedResult(idempotencyKey: string): Promise<SubmitResult | undefined> {
+    try {
+      const response = await this.rpc.request(submitStatusPath(this.contractId, idempotencyKey), {
+        method: 'GET',
+        headers: { accept: 'application/json' },
+      });
+      return decodeSubmitResult(response);
+    } catch (err) {
+      const normalized = normalizeError(err, VeroErrorCode.Unknown);
+      if (
+        normalized.code === VeroErrorCode.TransactionFailed ||
+        normalized.code === VeroErrorCode.BadSequence
+      ) {
+        throw normalized;
+      }
+      return undefined;
+    }
   }
 }
 
@@ -288,6 +343,14 @@ function clampAttempts(value: number | undefined): number {
 
 function isTransportRetry(code: VeroErrorCode): boolean {
   return code === VeroErrorCode.AllEndpointsFailed || code === VeroErrorCode.RpcTimeout;
+}
+
+function createIdempotencyKey(): string {
+  return `vero-submit-${globalThis.crypto.randomUUID()}`;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function decodeSubmitResult(value: unknown): SubmitResult {
