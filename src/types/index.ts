@@ -25,6 +25,8 @@ export enum Role {
  *
  * Mirrors `DataKey` in `vero-core-contracts/src/contracts/storage_layout.rs`.
  * Values are the `manageData` entry names as they appear on-chain.
+ * 
+ * NOTE: Drift between these keys and the contract is guarded by `datakey-sync.test.ts`.
  */
 export const DataKey = {
   task: (taskId: number | bigint) => `task_${taskId}`,
