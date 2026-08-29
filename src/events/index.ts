@@ -12,3 +12,9 @@ export * from './decoder.js';
 
 // Cursor — no-skip cursor persistence (vero-core-engine#179).
 export * from './cursor.js';
+
+// ProcessedSet — deduplication interface and in-memory default.
+export * from './processed-set.js';
+
+// EventStream — automated polling loop with back-off and reorg recovery.
+export * from './stream.js';

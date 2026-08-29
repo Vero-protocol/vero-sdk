@@ -17,6 +17,8 @@
  * success can never be skipped. Re-delivery is always safer than loss.
  */
 
+import { type ProcessedSet } from './processed-set.js';
+
 /** Persistence for the stream cursor. Swap in a file, DB, or KV store. */
 export interface CursorStore {
   /** Read the persisted cursor position, or `null` when none exists. */
@@ -29,6 +31,11 @@ export interface CursorStore {
 export interface StreamEvent {
   /** Opaque position token (e.g. the event's `id`/paging token). */
   cursor: string;
+  /**
+   * Stable deduplication key. Required when a ProcessedSet is in use;
+   * optional for callers that do not need deduplication.
+   */
+  id?: string;
 }
 
 /**
@@ -42,9 +49,11 @@ export interface StreamEvent {
  */
 export class EventCursor {
   private readonly store: CursorStore;
+  private readonly processedSet?: ProcessedSet;
 
-  constructor(store: CursorStore) {
+  constructor(store: CursorStore, processedSet?: ProcessedSet) {
     this.store = store;
+    this.processedSet = processedSet;
   }
 
   /** Read the persisted cursor position, or `null` when none exists. */
@@ -61,20 +70,48 @@ export class EventCursor {
    * untouched and the error propagates to the caller, so the event is
    * re-delivered on the next run rather than silently skipped.
    *
+   * DEDUPLICATION: When a `ProcessedSet` is provided and `event.id` is a
+   * non-empty string, the event is skipped (returns `undefined`) if its ID
+   * is already in the set. The ID is added to the set only after both the
+   * consumer resolves AND the cursor write succeeds. This ordering ensures
+   * that a crash between steps can only cause safe re-delivery, never a
+   * silent skip.
+   *
    * Do NOT move cursor persistence before the consumer call — the regression
    * test in `src/__tests__/events.test.ts` fails if you do.
+   * Do NOT move processedSet.add before store.set — that would recreate the
+   * vero-core-engine#179 bug pattern for the deduplication path.
    *
-   * @returns Whatever the consumer returned.
-   * @throws Whatever the consumer threw (cursor untouched), or any error
-   *         from persisting the cursor (consumer already ran; the event may
-   *         be re-delivered, which is safe).
+   * @returns Whatever the consumer returned, or `undefined` if the event was
+   *          skipped due to deduplication.
+   * @throws Whatever the consumer threw (cursor untouched, id not added), or
+   *         any error from persisting the cursor (consumer already ran; the
+   *         event may be re-delivered, which is safe).
    */
   async process<T>(
     event: StreamEvent,
     consumer: (event: StreamEvent) => T | Promise<T>,
-  ): Promise<T> {
-    const result = await consumer(event); // throws → cursor untouched
-    await this.store.set(event.cursor); // only after success
+  ): Promise<T | undefined> {
+    // 1. Deduplication check — skip if already processed
+    if (this.processedSet != null && event.id) {
+      if (await this.processedSet.has(event.id)) {
+        return undefined;
+      }
+    }
+
+    // 2. Consumer (throws → cursor untouched, id not added)
+    const result = await consumer(event);
+
+    // 3. Persist cursor (throws → id not added; event may re-deliver)
+    await this.store.set(event.cursor);
+
+    // 4. Record as processed — ONLY after store.set succeeds
+    //    (add after store.set, not before — reversing this order recreates
+    //    the vero-core-engine#179 silent-skip bug on the dedup path)
+    if (this.processedSet != null && event.id) {
+      await this.processedSet.add(event.id);
+    }
+
     return result;
   }
 
@@ -94,8 +131,21 @@ export class EventCursor {
   ): Promise<T[]> {
     const results: T[] = [];
     for (const event of events) {
-      results.push(await this.process(event, consumer));
+      results.push(await this.process(event, consumer) as T);
     }
     return results;
+  }
+
+  /**
+   * Unconditionally overwrite the persisted cursor to `cursor`.
+   *
+   * Used by `EventStream` during reorg rewinds. Not part of normal
+   * event-processing flow — does not invoke the consumer or touch the
+   * `ProcessedSet`.
+   *
+   * @param cursor - The cursor value to persist.
+   */
+  async reset(cursor: string): Promise<void> {
+    await this.store.set(cursor);
   }
 }

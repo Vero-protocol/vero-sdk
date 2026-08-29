@@ -445,3 +445,441 @@ describe('DecodedEvent union', () => {
     ]);
   });
 });
+
+import { InMemoryProcessedSet } from '../events';
+import { EventStream } from '../events';
+
+// ---------------------------------------------------------------------------
+// EventCursor — deduplication (ProcessedSet)  [Requirement 3, 7.1]
+// ---------------------------------------------------------------------------
+
+describe('EventCursor — deduplication (ProcessedSet)', () => {
+  function makeStore(initial: string | null = null) {
+    let cursor = initial;
+    const writes: string[] = [];
+    return {
+      store: {
+        get: () => cursor,
+        set: async (c: string) => {
+          cursor = c;
+          writes.push(c);
+        },
+      } satisfies CursorStore,
+      read: () => cursor,
+      writes,
+    };
+  }
+
+  it('skips consumer for an already-processed event ID', async () => {
+    const { store, read, writes } = makeStore('evt-0');
+    const ps = new InMemoryProcessedSet();
+    ps.add('id-1');
+    const cursor = new EventCursor(store, ps);
+
+    let consumerCalls = 0;
+    const result = await cursor.process(
+      { cursor: 'evt-1', id: 'id-1' },
+      async () => {
+        consumerCalls += 1;
+      },
+    );
+
+    // Consumer must NOT have been called; cursor store must be untouched.
+    expect(consumerCalls).toBe(0);
+    expect(result).toBeUndefined();
+    expect(read()).toBe('evt-0');
+    expect(writes).toEqual([]);
+  });
+
+  it('calls consumer exactly once on first delivery, skips on re-delivery', async () => {
+    const { store } = makeStore();
+    const ps = new InMemoryProcessedSet();
+    const cursor = new EventCursor(store, ps);
+
+    let consumerCalls = 0;
+    const event = { cursor: 'evt-1', id: 'id-1' };
+
+    // First delivery — consumer runs.
+    await cursor.process(event, async () => {
+      consumerCalls += 1;
+    });
+    expect(consumerCalls).toBe(1);
+
+    // Re-delivery — consumer must be skipped.
+    await cursor.process(event, async () => {
+      consumerCalls += 1;
+    });
+    expect(consumerCalls).toBe(1); // still 1 — second call was skipped
+  });
+
+  it('advances cursor and adds id on success', async () => {
+    const { store, read } = makeStore();
+    const ps = new InMemoryProcessedSet();
+    const cursor = new EventCursor(store, ps);
+
+    await cursor.process({ cursor: 'evt-1', id: 'id-1' }, async () => {});
+
+    expect(read()).toBe('evt-1');
+    expect(ps.has('id-1')).toBe(true);
+  });
+
+  it('behaves identically to baseline when no processedSet is provided', async () => {
+    // No processedSet — pure no-skip behaviour, no dedup check.
+    const { store, read, writes } = makeStore();
+    const cursor = new EventCursor(store); // no processedSet
+
+    const result = await cursor.process({ cursor: 'evt-1' }, async (ev) => `handled:${ev.cursor}`);
+
+    expect(result).toBe('handled:evt-1');
+    expect(read()).toBe('evt-1');
+    expect(writes).toEqual(['evt-1']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EventCursor — consumer throw with processedSet  [Requirement 3.4, 7.3]
+// ---------------------------------------------------------------------------
+
+describe('EventCursor — consumer throw with processedSet', () => {
+  function makeStore(initial: string | null = null) {
+    let cursor = initial;
+    const writes: string[] = [];
+    return {
+      store: {
+        get: () => cursor,
+        set: async (c: string) => {
+          cursor = c;
+          writes.push(c);
+        },
+      } satisfies CursorStore,
+      read: () => cursor,
+      writes,
+    };
+  }
+
+  it('does not add id to processedSet when consumer throws', async () => {
+    const { store, read, writes } = makeStore('evt-0');
+    const ps = new InMemoryProcessedSet();
+    const cursor = new EventCursor(store, ps);
+
+    await expect(
+      cursor.process({ cursor: 'evt-1', id: 'id-1' }, () => {
+        throw new Error('consumer failed');
+      }),
+    ).rejects.toThrow('consumer failed');
+
+    // processedSet must NOT contain the id.
+    expect(ps.has('id-1')).toBe(false);
+    // Cursor store must be untouched (vero-core-engine#179 regression guard).
+    expect(read()).toBe('evt-0');
+    expect(writes).toEqual([]);
+  });
+
+  it('does not add id to processedSet when cursor store write throws', async () => {
+    let storeWrites = 0;
+    const failingStore: CursorStore = {
+      get: () => null,
+      set: async () => {
+        storeWrites += 1;
+        throw new Error('disk full');
+      },
+    };
+    const ps = new InMemoryProcessedSet();
+    const cursor = new EventCursor(failingStore, ps);
+
+    await expect(
+      cursor.process({ cursor: 'evt-1', id: 'id-1' }, async () => {}),
+    ).rejects.toThrow('disk full');
+
+    // Store write was attempted (consumer ran first).
+    expect(storeWrites).toBe(1);
+    // But id must NOT be in processedSet — store.set failed before add.
+    expect(ps.has('id-1')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// InMemoryProcessedSet — bounded eviction  [Requirement 2, 7.6]
+// ---------------------------------------------------------------------------
+
+describe('InMemoryProcessedSet — bounded eviction', () => {
+  it('never exceeds maxSize entries, evicts oldest on overflow', () => {
+    const ps = new InMemoryProcessedSet(3);
+    ps.add('a');
+    ps.add('b');
+    ps.add('c');
+
+    // At capacity — adding 'd' must evict 'a' (FIFO)
+    ps.add('d');
+
+    expect(ps.has('a')).toBe(false); // evicted
+    expect(ps.has('b')).toBe(true);
+    expect(ps.has('c')).toBe(true);
+    expect(ps.has('d')).toBe(true);
+  });
+
+  it('is idempotent: re-adding an existing id does not evict or change count', () => {
+    const ps = new InMemoryProcessedSet(3);
+    ps.add('a');
+    ps.add('b');
+    ps.add('c');
+    ps.add('b'); // re-add — must be a no-op
+
+    // 'a' must not have been evicted — we're still at capacity 3.
+    expect(ps.has('a')).toBe(true);
+    expect(ps.has('b')).toBe(true);
+    expect(ps.has('c')).toBe(true);
+  });
+
+  it('evicts oldest first across multiple overflow insertions', () => {
+    const ps = new InMemoryProcessedSet(3);
+    ps.add('a');
+    ps.add('b');
+    ps.add('c');
+    ps.add('d'); // evicts 'a'
+    ps.add('e'); // evicts 'b'
+
+    expect(ps.has('a')).toBe(false);
+    expect(ps.has('b')).toBe(false);
+    expect(ps.has('c')).toBe(true);
+    expect(ps.has('d')).toBe(true);
+    expect(ps.has('e')).toBe(true);
+  });
+
+  it('defaults to maxSize of 10_000', () => {
+    const ps = new InMemoryProcessedSet();
+    for (let i = 0; i < 10_001; i++) {
+      ps.add(`id-${i}`);
+    }
+    // First entry 'id-0' must have been evicted.
+    expect(ps.has('id-0')).toBe(false);
+    // Last entry must be present.
+    expect(ps.has('id-10000')).toBe(true);
+  });
+
+  it('throws RangeError for invalid maxSize', () => {
+    expect(() => new InMemoryProcessedSet(0)).toThrow(RangeError);
+    expect(() => new InMemoryProcessedSet(-1)).toThrow(RangeError);
+    expect(() => new InMemoryProcessedSet(1.5)).toThrow(RangeError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EventStream.stop() — timer cleanup  [Requirement 4.3, 4.4, 7.4]
+// ---------------------------------------------------------------------------
+
+describe('EventStream.stop() — timer cleanup', () => {
+  function makeMinimalCursor(initial: string | null = null): EventCursor {
+    let cursor = initial;
+    const store: CursorStore = {
+      get: () => cursor,
+      set: async (c: string) => { cursor = c; },
+    };
+    return new EventCursor(store);
+  }
+
+  it('leaves no active timer handles after stop()', () => {
+    jest.useFakeTimers();
+    try {
+      const cursor = makeMinimalCursor();
+      // fetch never resolves synchronously — the stream will schedule a timer
+      const fetch = jest.fn(() => new Promise<StreamEvent[]>(() => {}));
+      const consumer = jest.fn(async () => {});
+
+      const stream = new EventStream({ cursor, fetch, consumer, minDelayMs: 100 });
+      stream.start();
+      stream.stop();
+
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('stop() is safe to call before start()', () => {
+    jest.useFakeTimers();
+    try {
+      const cursor = makeMinimalCursor();
+      const fetch = jest.fn(async () => [] as StreamEvent[]);
+      const consumer = jest.fn(async () => {});
+      const stream = new EventStream({ cursor, fetch, consumer });
+
+      // Must not throw.
+      expect(() => stream.stop()).not.toThrow();
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EventStream — reorg rewind  [Requirement 5, 7.5]
+// ---------------------------------------------------------------------------
+
+describe('EventStream — reorg rewind', () => {
+  function makeTrackedCursor(initial: string | null = null) {
+    let cursor = initial;
+    const writes: string[] = [];
+    const store: CursorStore = {
+      get: () => cursor,
+      set: async (c: string) => {
+        cursor = c;
+        writes.push(c);
+      },
+    };
+    return { cursor: new EventCursor(store), read: () => cursor, writes };
+  }
+
+  it('calls onReorgRewind and rewinds cursor when fetch throws unresolvable error', async () => {
+    const { cursor, read } = makeTrackedCursor('stale-cursor');
+
+    const rewindTarget = 'rewind-target';
+    const fetchCalls: Array<string | null> = [];
+    const onReorgRewind = jest.fn();
+    const resolveRewindTarget = jest.fn(async () => rewindTarget);
+
+    // Use an AbortController so we can stop the stream after the reorg fires.
+    const ac = new AbortController();
+    let fetchCallCount = 0;
+
+    const fetch = jest.fn(async (pos: string | null) => {
+      fetchCalls.push(pos);
+      fetchCallCount += 1;
+      if (fetchCallCount === 1) {
+        throw new Error('cursor unresolvable');
+      }
+      // After reorg handled, stop the stream so the loop doesn't spin.
+      ac.abort();
+      return [] as StreamEvent[];
+    });
+
+    const consumer = jest.fn(async () => {});
+
+    const stream = new EventStream({
+      cursor,
+      fetch,
+      consumer,
+      resolveRewindTarget,
+      onReorgRewind,
+      signal: ac.signal,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+    });
+
+    stream.start();
+
+    // Wait for the async loop to process reorg + one more fetch then abort.
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (fetchCallCount >= 2) { resolve(); return; }
+        setImmediate(check);
+      };
+      check();
+    });
+
+    stream.stop();
+
+    // onReorgRewind must have been called with old and new cursor
+    expect(onReorgRewind).toHaveBeenCalledWith('stale-cursor', rewindTarget);
+    // Cursor must have been rewound
+    expect(read()).toBe(rewindTarget);
+    // resolveRewindTarget must have been called with the stale cursor
+    expect(resolveRewindTarget).toHaveBeenCalledWith('stale-cursor');
+    // Second fetch must have used the rewound cursor position
+    expect(fetchCalls[1]).toBe(rewindTarget);
+  });
+
+  it('rewinds to null when resolveRewindTarget is not provided', async () => {
+    const { cursor, read } = makeTrackedCursor('stale-cursor');
+
+    const onReorgRewind = jest.fn();
+    const ac = new AbortController();
+    let fetchCallCount = 0;
+
+    const fetch = jest.fn(async () => {
+      fetchCallCount += 1;
+      if (fetchCallCount === 1) {
+        throw new Error('cursor is unresolvable');
+      }
+      ac.abort();
+      return [] as StreamEvent[];
+    });
+
+    const consumer = jest.fn(async () => {});
+
+    const stream = new EventStream({
+      cursor,
+      fetch,
+      consumer,
+      onReorgRewind,
+      // No resolveRewindTarget — should default to null
+      signal: ac.signal,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+    });
+
+    stream.start();
+
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (fetchCallCount >= 2) { resolve(); return; }
+        setImmediate(check);
+      };
+      check();
+    });
+
+    stream.stop();
+
+    // onReorgRewind called with null as newCursor
+    expect(onReorgRewind).toHaveBeenCalledWith('stale-cursor', null);
+    // Cursor store not written (null rewind means no reset call)
+    expect(read()).toBe('stale-cursor');
+  });
+
+  it('uses custom isReorgError predicate when provided', async () => {
+    const { cursor } = makeTrackedCursor(null);
+
+    const onReorgRewind = jest.fn();
+    const ac = new AbortController();
+    let fetchCallCount = 0;
+
+    const fetch = jest.fn(async () => {
+      fetchCallCount += 1;
+      if (fetchCallCount === 1) {
+        throw new Error('LEDGER_NOT_FOUND'); // not "unresolvable"
+      }
+      ac.abort();
+      return [] as StreamEvent[];
+    });
+
+    const consumer = jest.fn(async () => {});
+
+    const stream = new EventStream({
+      cursor,
+      fetch,
+      consumer,
+      onReorgRewind,
+      isReorgError: (err) =>
+        err instanceof Error && err.message.includes('LEDGER_NOT_FOUND'),
+      signal: ac.signal,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+    });
+
+    stream.start();
+
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (fetchCallCount >= 2) { resolve(); return; }
+        setImmediate(check);
+      };
+      check();
+    });
+
+    stream.stop();
+
+    // Custom predicate matched — rewind should have been triggered.
+    expect(onReorgRewind).toHaveBeenCalled();
+  });
+});
