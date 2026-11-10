@@ -1,7 +1,7 @@
 {
   "name": "@vero-protocol/sdk",
   "version": "0.1.0",
-  "description": "Shared Stellar client library for the Vero Protocol — typed contract client, nonce management, RPC failover, and wallet adapters.",
+  "description": "Shared Stellar client library for the Vero Protocol \u2014 typed contract client, nonce management, RPC failover, and wallet adapters.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -32,9 +32,9 @@
   },
   "scripts": {
     "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build:cjs": "tsc -p tsconfig.build.json",
-    "build:esm": "tsc -p tsconfig.esm.json",
-    "build": "npm run build:cjs && npm run build:esm && node scripts/write-dist-manifests.mjs",
+    "build:cjs": "node init && tsc -p tsconfig.build.json",
+    "build:esm": "node init && tsc -p tsconfig.esm.json",
+    "build": "node init && npm run build:cjs && npm run build:esm && node scripts/write-dist-manifests.mjs",
     "prepublishOnly": "npm run build && npm run test:package",
     "test:package": "node scripts/smoke-test.mjs",
     "typecheck": "tsc --noEmit",

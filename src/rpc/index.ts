@@ -16,6 +16,13 @@
 import { VeroError, VeroErrorCode, normalizeError } from '../errors/index.js';
 import { validateUrl, type ValidateUrlOptions } from '../network/index.js';
 import type { Logger } from '../types/index.js';
+import {
+  CircuitBreaker,
+  type CircuitBreakerOptions,
+  HealthScheduler,
+  type HealthSchedulerOptions,
+  type CircuitState,
+} from '../resilience/index.js';
 
 export interface RpcEndpoint {
   url: string;
@@ -35,6 +42,10 @@ export interface RpcClientOptions {
   urlOptions?: ValidateUrlOptions;
   /** Injectable for tests. Defaults to global `fetch`. */
   fetchImpl?: typeof fetch;
+  /** Opt-in endpoint circuit breaker configuration. */
+  circuitBreaker?: CircuitBreakerOptions | boolean;
+  /** Opt-in background health probing scheduler configuration. */
+  healthScheduler?: HealthSchedulerOptions | boolean;
 }
 
 interface EndpointState {
@@ -42,6 +53,7 @@ interface EndpointState {
   priority: number;
   consecutiveFailures: number;
   quarantinedUntil: number;
+  breaker?: CircuitBreaker;
 }
 
 /** Thrown per-endpoint internally; not exported. */
@@ -54,20 +66,39 @@ export class RpcClient {
   private readonly failureThreshold: number;
   private readonly logger?: Logger;
   private readonly fetchImpl: typeof fetch;
+  private readonly healthScheduler?: HealthScheduler;
 
   constructor(opts: RpcClientOptions) {
     if (!opts.endpoints?.length) {
       throw new VeroError(VeroErrorCode.InvalidUrl, 'At least one RPC endpoint is required');
     }
 
+    const cbEnabled = Boolean(opts.circuitBreaker);
+    const cbOpts: CircuitBreakerOptions = typeof opts.circuitBreaker === 'object' ? opts.circuitBreaker : {};
+
     this.endpoints = opts.endpoints.map((e, i) => {
       const { url, priority } = typeof e === 'string' ? { url: e, priority: i } : e;
       validateUrl(url, opts.urlOptions);
+      const normalizedUrl = url.replace(/\/+$/, '');
+
+      const breaker = cbEnabled
+        ? new CircuitBreaker({
+            failureThreshold: opts.failureThreshold ?? 3,
+            resetTimeoutMs: opts.quarantineMs ?? 30_000,
+            ...cbOpts,
+            onStateChange: (from, to, meta) => {
+              this.logger?.warn?.(`Endpoint circuit breaker state changed for ${normalizedUrl}: ${from} -> ${to}`, meta);
+              cbOpts.onStateChange?.(from, to, meta);
+            },
+          })
+        : undefined;
+
       return {
-        url: url.replace(/\/+$/, ''),
+        url: normalizedUrl,
         priority: priority ?? i,
         consecutiveFailures: 0,
         quarantinedUntil: 0,
+        breaker,
       };
     });
 
@@ -84,11 +115,29 @@ export class RpcClient {
       );
     }
     this.fetchImpl = f;
+
+    if (opts.healthScheduler) {
+      const hsOpts: HealthSchedulerOptions = typeof opts.healthScheduler === 'object' ? opts.healthScheduler : {};
+      this.healthScheduler = new HealthScheduler({
+        logger: this.logger,
+        ...hsOpts,
+      });
+
+      for (const ep of this.endpoints) {
+        if (ep.breaker) {
+          this.healthScheduler.register(ep.url, ep.breaker);
+        }
+      }
+
+      this.healthScheduler.start();
+    }
   }
 
   /** Endpoints currently eligible, best first. */
   private available(now: number): EndpointState[] {
-    const live = this.endpoints.filter((e) => e.quarantinedUntil <= now);
+    const live = this.endpoints.filter((e) =>
+      e.breaker ? e.breaker.canExecute(now) : e.quarantinedUntil <= now,
+    );
     // All quarantined: try everything anyway rather than failing outright — a
     // stale quarantine shouldn't cause a total outage.
     const pool = live.length > 0 ? live : this.endpoints;
@@ -97,6 +146,7 @@ export class RpcClient {
 
   private penalise(ep: EndpointState, now: number, reason: string): void {
     ep.consecutiveFailures += 1;
+    ep.breaker?.recordFailure(now, reason);
     if (ep.consecutiveFailures >= this.failureThreshold) {
       ep.quarantinedUntil = now + this.quarantineMs;
       this.logger?.warn('RPC endpoint quarantined', {
@@ -147,6 +197,7 @@ export class RpcClient {
         if (res.status >= 500) throw new TransportError(`HTTP ${res.status}`);
 
         ep.consecutiveFailures = 0;
+        ep.breaker?.recordSuccess(now);
 
         if (!res.ok) {
           throw new VeroError(
@@ -176,12 +227,13 @@ export class RpcClient {
   }
 
   /** Snapshot of endpoint health, for diagnostics and dashboards. */
-  health(): { url: string; healthy: boolean; consecutiveFailures: number }[] {
+  health(): { url: string; healthy: boolean; consecutiveFailures: number; circuitState?: CircuitState }[] {
     const now = Date.now();
     return this.endpoints.map((e) => ({
       url: e.url,
-      healthy: e.quarantinedUntil <= now,
+      healthy: e.breaker ? e.breaker.getState(now) === 'CLOSED' : e.quarantinedUntil <= now,
       consecutiveFailures: e.consecutiveFailures,
+      ...(e.breaker ? { circuitState: e.breaker.getState(now) } : {}),
     }));
   }
 
@@ -190,7 +242,15 @@ export class RpcClient {
     for (const e of this.endpoints) {
       e.consecutiveFailures = 0;
       e.quarantinedUntil = 0;
+      e.breaker?.reset();
     }
+  }
+
+  /**
+   * Stop background health probing scheduler and release all timers.
+   */
+  stop(): void {
+    this.healthScheduler?.stop();
   }
 }
 
